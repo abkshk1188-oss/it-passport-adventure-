@@ -1,6 +1,7 @@
 // ITパスポート冒険記 - 永続化(localStorage)
 const Storage = (() => {
   const KEY = "itpass-adventure-save-v1";
+  const SAVE_VERSION = 2;
 
   function todayStr() {
     const d = new Date();
@@ -11,17 +12,20 @@ const Storage = (() => {
 
   function defaultState() {
     return {
-      version: 1,
+      version: SAVE_VERSION,
       level: 1,
       xp: 0,
       totalCorrect: 0,
       totalAnswered: 0,
       streak: 0,
+      maxCombo: 0,
       lastPlayedDate: null,
       clearedTopics: {},   // topicKey -> { stars, bestCorrect, bestTotal, attempts }
       clearedBoss: {},     // world -> true
-      wrongCounts: {},     // qid -> number of times answered incorrectly
-      correctCounts: {},   // qid -> number of times answered correctly
+      wrongCounts: {},     // qid -> 間違えた回数
+      correctCounts: {},   // qid -> 正解した回数
+      examHistory: [],     // [{ date, mode, correct, total, percent, fields, passed, elapsedSec }]
+      settings: { vibration: true },
       createdAt: todayStr(),
     };
   }
@@ -31,8 +35,11 @@ const Storage = (() => {
       const raw = localStorage.getItem(KEY);
       if (!raw) return defaultState();
       const parsed = JSON.parse(raw);
-      // shallow-merge to survive future added fields
-      return Object.assign(defaultState(), parsed);
+      // 新しいフィールドが増えても既存セーブを壊さないようマージする
+      const merged = Object.assign(defaultState(), parsed);
+      merged.settings = Object.assign(defaultState().settings, parsed.settings || {});
+      merged.version = SAVE_VERSION;
+      return merged;
     } catch (e) {
       console.warn("save data corrupted, starting fresh", e);
       return defaultState();
@@ -52,12 +59,10 @@ const Storage = (() => {
     return defaultState();
   }
 
-  // Call once per app-open (or once per battle-clear) to update the daily streak.
+  // アプリを開いた日/バトルをクリアした日ごとに1回だけ連続記録を更新する
   function touchStreak(state) {
     const today = todayStr();
-    if (state.lastPlayedDate === today) {
-      return state; // already counted today
-    }
+    if (state.lastPlayedDate === today) return state;
     if (state.lastPlayedDate) {
       const prev = new Date(state.lastPlayedDate);
       const cur = new Date(today);
