@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ITパスポート冒険記</title>
+<meta name="description" content="ITパスポート試験対策をRPG風すごろくで楽しく学べる学習ゲーム">
+<meta name="theme-color" content="#1e1b4b">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header id="topbar" class="topbar hidden">
+  <div class="topbar-avatar"><span id="topbar-emoji">🥚</span></div>
+  <div class="topbar-info">
+    <div class="topbar-row">
+      <span id="topbar-title">ITの卵</span>
+      <span id="topbar-level" class="pill">Lv.1</span>
+    </div>
+    <div class="xp-bar"><div id="topbar-xp-fill" class="xp-bar-fill"></div></div>
+  </div>
+  <div class="topbar-streak" title="連続記録">🔥<span id="topbar-streak">0</span></div>
+</header>
+
+<main id="app">
+
+  <!-- ホーム画面 -->
+  <section id="screen-home" class="screen">
+    <div class="home-hero">
+      <div class="home-logo">🎮📘</div>
+      <h1>ITパスポート<br>冒険記</h1>
+      <p class="home-sub">すごろくマップを進んで、ITパスポートの知識を身につけよう</p>
+    </div>
+    <div class="home-character-card" id="home-character-card">
+      <div class="avatar-big" id="home-emoji">🥚</div>
+      <div class="home-character-text">
+        <div id="home-title" class="home-title">ITの卵</div>
+        <div id="home-level" class="home-level">Lv.1</div>
+      </div>
+    </div>
+    <div class="home-buttons">
+      <button class="btn btn-primary" id="btn-goto-map">🗺️ 冒険に出る</button>
+      <button class="btn btn-secondary" id="btn-goto-status">📊 ステータス</button>
+      <button class="btn btn-secondary" id="btn-goto-review">📖 復習ダンジョン</button>
+    </div>
+    <button class="btn-link" id="btn-reset">セーブデータをリセット</button>
+  </section>
+
+  <!-- マップ画面 -->
+  <section id="screen-map" class="screen">
+    <h2 class="screen-heading">🗺️ 冒険マップ</h2>
+    <div id="world-tabs" class="world-tabs"></div>
+    <div id="map-container" class="map-container"></div>
+  </section>
+
+  <!-- バトル画面 -->
+  <section id="screen-battle" class="screen">
+    <div class="battle-header">
+      <div id="battle-progress" class="battle-progress">問 1/5</div>
+      <div id="battle-topic" class="battle-topic-label"></div>
+    </div>
+    <div class="battle-card">
+      <div id="battle-question" class="battle-question">読み込み中...</div>
+      <div id="battle-choices" class="battle-choices"></div>
+      <div id="battle-feedback" class="battle-feedback hidden"></div>
+    </div>
+    <button class="btn btn-primary hidden" id="btn-next-question">次へ ▶</button>
+  </section>
+
+  <!-- 結果画面 -->
+  <section id="screen-result" class="screen">
+    <h2 class="screen-heading" id="result-heading">バトル結果</h2>
+    <div class="result-card">
+      <div class="result-stars" id="result-stars">⭐⭐⭐</div>
+      <div class="result-score" id="result-score">5 / 5 正解</div>
+      <div class="result-xp" id="result-xp">+50 XP</div>
+      <div id="result-levelup" class="result-levelup hidden">🎉 レベルアップ！ Lv.<span id="result-newlevel"></span></div>
+      <div id="result-message" class="result-message"></div>
+    </div>
+    <div class="home-buttons">
+      <button class="btn btn-primary" id="btn-result-retry">もう一度挑戦</button>
+      <button class="btn btn-secondary" id="btn-result-map">マップに戻る</button>
+    </div>
+  </section>
+
+  <!-- ステータス画面 -->
+  <section id="screen-status" class="screen">
+    <h2 class="screen-heading">📊 ステータス</h2>
+    <div class="status-card">
+      <div class="avatar-big" id="status-emoji">🥚</div>
+      <div id="status-title" class="home-title">ITの卵</div>
+      <div id="status-level" class="home-level">Lv.1</div>
+      <div class="xp-bar xp-bar-wide"><div id="status-xp-fill" class="xp-bar-fill"></div></div>
+      <div id="status-xp-text" class="status-xp-text">0 / 40 XP</div>
+    </div>
+    <div class="status-grid">
+      <div class="status-box"><div class="status-box-value" id="status-accuracy">0%</div><div class="status-box-label">正答率</div></div>
+      <div class="status-box"><div class="status-box-value" id="status-answered">0</div><div class="status-box-label">累計解答数</div></div>
+      <div class="status-box"><div class="status-box-value" id="status-streak">0</div><div class="status-box-label">連続記録(日)</div></div>
+      <div class="status-box"><div class="status-box-value" id="status-progress">0%</div><div class="status-box-label">踏破率</div></div>
+    </div>
+    <h3 class="section-heading">分野別の状況</h3>
+    <div id="status-topics" class="status-topics"></div>
+  </section>
+
+  <!-- 復習ダンジョン画面 -->
+  <section id="screen-review" class="screen">
+    <h2 class="screen-heading">📖 復習ダンジョン</h2>
+    <p class="review-desc">これまで間違えた問題を中心に出題します。弱点を克服してXPを稼ごう。</p>
+    <div id="review-empty" class="review-empty hidden">まだ間違えた問題がありません。マップで冒険を進めましょう！</div>
+    <button class="btn btn-primary" id="btn-start-review">挑戦する</button>
+  </section>
+
+</main>
+
+<nav id="bottomnav" class="bottomnav hidden">
+  <button class="nav-btn" data-nav="home">🏠<span>ホーム</span></button>
+  <button class="nav-btn" data-nav="map">🗺️<span>マップ</span></button>
+  <button class="nav-btn" data-nav="status">📊<span>状況</span></button>
+  <button class="nav-btn" data-nav="review">📖<span>復習</span></button>
+</nav>
+
+<script src="js/questions.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/game.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
