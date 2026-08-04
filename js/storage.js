@@ -1,7 +1,7 @@
 // ITパスポート冒険記 - 永続化(localStorage)
 const Storage = (() => {
   const KEY = "itpass-adventure-save-v1";
-  const SAVE_VERSION = 2;
+  const SAVE_VERSION = 3;
 
   function todayStr() {
     const d = new Date();
@@ -25,6 +25,18 @@ const Storage = (() => {
       wrongCounts: {},     // qid -> 間違えた回数
       correctCounts: {},   // qid -> 正解した回数
       examHistory: [],     // [{ date, mode, correct, total, percent, fields, passed, elapsedSec }]
+
+      // --- コイン・ガチャ・コレクション ---
+      coins: 0,
+      totalCoinsEarned: 0,
+      ownedItems: {},      // itemId -> 所持数(重複含む)
+      unseenItems: [],     // 図鑑で未確認の新規アイテムID(NEWバッジ用)
+      gachaCount: 0,
+      equippedCharm: null, // お守りとして装備中のアイテムID
+      avatarItemId: null,  // アバターに設定中のアイテムID
+      openedChests: {},    // マップ上の宝箱マスの開封状況(chestKey -> true)
+      streakChestDate: null, // 継続報酬の宝箱を受け取った日付
+
       settings: { vibration: true },
       createdAt: todayStr(),
     };

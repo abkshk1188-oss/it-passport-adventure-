@@ -27,7 +27,10 @@
     </div>
     <div class="xp-bar"><div id="topbar-xp-fill" class="xp-bar-fill"></div></div>
   </div>
-  <div class="topbar-streak" title="連続学習日数">🔥<span id="topbar-streak">0</span></div>
+  <div class="topbar-meta">
+    <div class="topbar-coins" title="コイン">🪙<span id="topbar-coins">0</span></div>
+    <div class="topbar-streak" title="連続学習日数">🔥<span id="topbar-streak">0</span></div>
+  </div>
 </header>
 
 <main id="app">
@@ -47,9 +50,18 @@
         <div id="home-progress" class="home-progress">踏破率 0%</div>
       </div>
     </div>
+    <button class="streak-chest-card hidden" id="btn-streak-chest">
+      <span class="streak-chest-emoji">🔥</span>
+      <span class="streak-chest-text">
+        <strong>継続の宝箱</strong>
+        <small>今日の学習ボーナスを受け取れます</small>
+      </span>
+      <span class="streak-chest-go">▶</span>
+    </button>
     <div class="home-buttons">
       <button class="btn btn-primary" id="btn-goto-map">🗺️ 冒険に出る</button>
       <button class="btn btn-secondary" id="btn-goto-exam">📝 模擬試験に挑む</button>
+      <button class="btn btn-secondary" id="btn-goto-collection">🎁 ガチャ・図鑑</button>
       <button class="btn btn-secondary" id="btn-goto-review">📖 復習する</button>
     </div>
     <button class="btn-link" id="btn-reset">セーブデータをリセット</button>
@@ -150,6 +162,52 @@
     </div>
   </section>
 
+  <!-- ガチャ・図鑑 -->
+  <section id="screen-collection" class="screen">
+    <h2 class="screen-heading">🎁 ガチャ・図鑑</h2>
+
+    <div class="gacha-panel">
+      <div class="gacha-coin-row">
+        <span class="gacha-coin">🪙 <strong id="collection-coins">0</strong></span>
+        <span class="gacha-count" id="gacha-count">これまで0回</span>
+      </div>
+      <div class="gacha-buttons">
+        <button class="btn btn-primary btn-half" id="btn-gacha-single">
+          1回引く<small id="gacha-single-cost">150</small>
+        </button>
+        <button class="btn btn-primary btn-half" id="btn-gacha-multi">
+          10回引く<small id="gacha-multi-cost">1350</small>
+        </button>
+      </div>
+      <div class="gacha-hint" id="gacha-hint"></div>
+      <details class="gacha-rates">
+        <summary>提供割合と重複について</summary>
+        <div id="gacha-rates-body" class="gacha-rates-body"></div>
+      </details>
+    </div>
+
+    <div class="collection-summary">
+      <div class="collection-summary-head">
+        <span>入手状況</span>
+        <strong id="collection-progress">0 / 0(0%)</strong>
+      </div>
+      <div class="field-bar"><div id="collection-bar" class="field-bar-fill" style="background:var(--accent-gold)"></div></div>
+      <div id="collection-rarity" class="collection-rarity"></div>
+    </div>
+
+    <div class="collection-tabs">
+      <button class="collection-tab active" data-ctab="catalog">図鑑</button>
+      <button class="collection-tab" data-ctab="series">ストーリー</button>
+    </div>
+
+    <div id="collection-catalog">
+      <div id="rarity-filter" class="rarity-filter"></div>
+      <div id="item-grid" class="item-grid"></div>
+    </div>
+
+    <div id="collection-series" class="series-list hidden"></div>
+  </section>
+
   <!-- 復習 -->
   <section id="screen-review" class="screen">
     <h2 class="screen-heading">📖 復習</h2>
@@ -190,6 +248,20 @@
       <div class="status-box"><div class="status-box-value" id="status-streak">0</div><div class="status-box-label">連続学習(日)</div></div>
       <div class="status-box"><div class="status-box-value" id="status-combo">0</div><div class="status-box-label">最大コンボ</div></div>
     </div>
+    <h3 class="section-heading">装備</h3>
+    <div class="equip-list">
+      <div class="equip-row">
+        <div class="equip-label">アバター</div>
+        <div class="equip-value" id="equip-avatar">レベルに応じた姿</div>
+        <button class="btn-chip" id="btn-clear-avatar">戻す</button>
+      </div>
+      <div class="equip-row">
+        <div class="equip-label">お守り</div>
+        <div class="equip-value" id="equip-charm">なし</div>
+        <button class="btn-chip" id="btn-clear-charm">外す</button>
+      </div>
+      <div class="equip-note">図鑑でアイテムを選ぶと設定できます</div>
+    </div>
     <h3 class="section-heading">分野別の正答率</h3>
     <div id="status-field-accuracy" class="field-breakdown"></div>
     <h3 class="section-heading">ノード別の状況</h3>
@@ -207,6 +279,7 @@
   <button class="nav-btn" data-nav="home">🏠<span>ホーム</span></button>
   <button class="nav-btn" data-nav="map">🗺️<span>マップ</span></button>
   <button class="nav-btn" data-nav="exam">📝<span>試験</span></button>
+  <button class="nav-btn" data-nav="collection">🎁<span>図鑑</span><em class="nav-badge hidden" id="nav-badge-collection"></em></button>
   <button class="nav-btn" data-nav="review">📖<span>復習</span></button>
   <button class="nav-btn" data-nav="status">📊<span>状況</span></button>
 </nav>
@@ -223,7 +296,53 @@
   </div>
 </div>
 
+<!-- 宝箱の開封演出 -->
+<div id="chest-overlay" class="overlay hidden">
+  <div class="chest-card">
+    <div class="chest-emoji" id="chest-emoji">🎁</div>
+    <div class="chest-label" id="chest-label">バトルの宝箱</div>
+    <div class="chest-coins" id="chest-coins">🪙 +50</div>
+    <div id="chest-item" class="chest-item hidden">
+      <div class="chest-item-emoji" id="chest-item-emoji">💾</div>
+      <div class="chest-item-stars" id="chest-item-stars">★★</div>
+      <div class="chest-item-name" id="chest-item-name"></div>
+      <div class="chest-item-tag" id="chest-item-tag">NEW</div>
+    </div>
+    <div class="levelup-hint">タップして閉じる</div>
+  </div>
+</div>
+
+<!-- ガチャ結果 -->
+<div id="gacha-overlay" class="overlay hidden">
+  <div class="gacha-result-card">
+    <div class="gacha-result-title" id="gacha-result-title">✨ ガチャ結果</div>
+    <div id="gacha-result-list" class="gacha-result-list"></div>
+    <div class="gacha-result-foot" id="gacha-result-foot"></div>
+    <button class="btn btn-secondary" id="btn-gacha-close">閉じる</button>
+  </div>
+</div>
+
+<!-- アイテム詳細 -->
+<div id="item-overlay" class="overlay hidden">
+  <div class="item-detail-card">
+    <div class="item-detail-emoji" id="item-detail-emoji">💾</div>
+    <div class="item-detail-stars" id="item-detail-stars">★★</div>
+    <div class="item-detail-name" id="item-detail-name"></div>
+    <div class="item-detail-cat" id="item-detail-cat"></div>
+    <div class="item-detail-flavor" id="item-detail-flavor"></div>
+    <div class="item-detail-effect hidden" id="item-detail-effect"></div>
+    <div class="item-detail-series hidden" id="item-detail-series"></div>
+    <div class="item-detail-count" id="item-detail-count"></div>
+    <div class="item-detail-actions">
+      <button class="btn btn-secondary btn-half hidden" id="btn-set-avatar">アバターにする</button>
+      <button class="btn btn-secondary btn-half hidden" id="btn-set-charm">お守りにする</button>
+    </div>
+    <button class="btn-link" id="btn-item-close">閉じる</button>
+  </div>
+</div>
+
 <script src="js/questions.js"></script>
+<script src="js/items.js"></script>
 <script src="js/storage.js"></script>
 <script src="js/game.js"></script>
 <script src="js/app.js"></script>

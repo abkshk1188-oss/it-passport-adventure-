@@ -9,11 +9,16 @@
   const el = id => document.getElementById(id);
   const MARKS = ["ア", "イ", "ウ", "エ"];
 
+  let overlayQueue = [];   // レベルアップと宝箱が重なった時に順番に見せる
+  let rarityFilter = 0;    // 図鑑のレアリティ絞り込み(0 = すべて)
+  let collectionTab = "catalog";
+  let detailItemId = null;
+
   // 画面名 -> 下部ナビでハイライトするタブ
   const NAV_PARENT = {
     home: "home", map: "map", battle: "map", result: "map",
     exam: "exam", "exam-battle": "exam", "exam-result": "exam",
-    review: "review", wrong: "review", status: "status",
+    collection: "collection", review: "review", wrong: "review", status: "status",
   };
   // 回答に集中させたい画面ではナビを隠す
   const HIDE_NAV = ["battle", "exam-battle"];
@@ -66,12 +71,35 @@
     el("topbar-level").textContent = `Lv.${c.level}`;
     el("topbar-xp-fill").style.width = `${c.xpPercent}%`;
     el("topbar-streak").textContent = c.streak;
+    el("topbar-coins").textContent = c.coins;
+    renderNavBadge();
+  }
+
+  // 図鑑タブに未確認アイテムの件数を出す
+  function renderNavBadge() {
+    const badge = el("nav-badge-collection");
+    const n = (state.unseenItems || []).length;
+    badge.textContent = n > 9 ? "9+" : n;
+    badge.classList.toggle("hidden", n === 0);
+  }
+
+  // ---------------- オーバーレイの順番待ち ----------------
+  function enqueueOverlay(fn) {
+    overlayQueue.push(fn);
+    if (overlayQueue.length === 1) fn();
+  }
+
+  function dismissOverlay(overlayId) {
+    el(overlayId).classList.add("hidden");
+    overlayQueue.shift();
+    if (overlayQueue.length) overlayQueue[0]();
   }
 
   function goto(name) {
     if (name === "home") renderHome();
     if (name === "map") renderMap();
     if (name === "exam") renderExamTop();
+    if (name === "collection") renderCollection();
     if (name === "review") renderReview();
     if (name === "wrong") renderWrongList();
     if (name === "status") renderStatus();
@@ -85,14 +113,17 @@
     const prog = Game.overallProgress(state);
     el("home-emoji").textContent = c.emoji;
     el("home-title").textContent = c.title;
-    el("home-level").textContent = `Lv.${c.level}`;
+    el("home-level").textContent = c.avatarName ? `Lv.${c.level} ・ ${c.avatarName}` : `Lv.${c.level}`;
     el("home-progress").textContent = `踏破率 ${prog.percent}%(${prog.clearedTopics}/${prog.totalTopics}ノード)`;
+    // 今日まだ受け取っていなければ継続の宝箱を出す
+    el("btn-streak-chest").classList.toggle("hidden", !Game.hasStreakChestReady(state));
   }
 
   // ---------------- マップ ----------------
   function findCurrentNode(mapData) {
     for (const w of mapData) {
       for (const n of w.nodes) {
+        if (n.type === "chest") continue; // 宝箱は進行位置の判定に含めない
         if (n.unlocked && !n.cleared) return { world: w.world, topic: n.topic, type: n.type };
       }
     }
@@ -140,6 +171,7 @@
       const wrap = make("div", "map-node-wrap");
       let cls = "map-node";
       if (node.type === "boss") cls += " boss";
+      if (node.type === "chest") cls += " chest";
       if (!node.unlocked) cls += " locked";
       else if (node.cleared) cls += " cleared";
       const nodeEl = make("div", cls);
@@ -150,14 +182,30 @@
         nodeEl.appendChild(make("div", "player-token", "🧍"));
       }
 
-      nodeEl.appendChild(make("div", "map-node-icon", node.type === "boss" ? "👹" : (node.unlocked ? "📘" : "🔒")));
-      nodeEl.appendChild(make("div", "map-node-label", node.label));
-      if (node.cleared) nodeEl.appendChild(make("div", "map-node-stars", "⭐".repeat(node.stars)));
+      let icon;
+      if (node.type === "boss") icon = "👹";
+      else if (node.type === "chest") icon = node.cleared ? "📭" : (node.unlocked ? "🎁" : "🔒");
+      else icon = node.unlocked ? "📘" : "🔒";
+      nodeEl.appendChild(make("div", "map-node-icon", icon));
+      nodeEl.appendChild(make("div", "map-node-label", node.type === "chest" ? (node.cleared ? "開封済" : "宝箱") : node.label));
+      if (node.cleared && node.type !== "chest") nodeEl.appendChild(make("div", "map-node-stars", "⭐".repeat(node.stars)));
 
       nodeEl.addEventListener("click", () => {
         if (!node.unlocked) return;
-        if (node.type === "boss") startBattle("boss", world.world, null);
-        else startBattle("topic", world.world, node.topic);
+        if (node.type === "chest") {
+          if (node.cleared) return;
+          const chest = Game.openChest(state, "map", node.chestKey);
+          if (chest) {
+            vibrate([0, 40, 40, 60]);
+            renderTopbar();
+            renderMap();
+            enqueueOverlay(() => showChest(chest));
+          }
+        } else if (node.type === "boss") {
+          startBattle("boss", world.world, null);
+        } else {
+          startBattle("topic", world.world, node.topic);
+        }
       });
 
       wrap.appendChild(nodeEl);
@@ -291,13 +339,14 @@
     renderTopbar();
     renderResult(summary, battle.mode);
     showScreen("result");
-    if (summary.leveledUp) showLevelUp();
+    if (summary.leveledUp) enqueueOverlay(showLevelUp);
+    if (summary.chest) enqueueOverlay(() => showChest(summary.chest));
   }
 
   function renderResult(summary, mode) {
     el("result-heading").textContent = mode === "boss" ? "👹 ボス戦の結果" : mode === "review" ? "📖 復習の結果" : "⚔️ バトル結果";
     el("result-score").textContent = `${summary.correctCount} / ${summary.total} 正解`;
-    el("result-xp").textContent = `+${summary.xpGained} XP`;
+    el("result-xp").textContent = `+${summary.xpGained} XP ・ 🪙 +${summary.coinsGained}`;
     el("result-combo").textContent = battle.maxCombo >= 2 ? `🔥 最大 ${battle.maxCombo} コンボ` : "";
 
     if (mode === "review") el("result-stars").textContent = summary.correctCount === summary.total ? "🎉" : "📚";
@@ -469,7 +518,8 @@
     renderTopbar();
     renderExamResult(summary);
     showScreen("exam-result");
-    if (summary.leveledUp) showLevelUp();
+    if (summary.leveledUp) enqueueOverlay(showLevelUp);
+    if (summary.chest) enqueueOverlay(() => showChest(summary.chest));
   }
 
   function renderExamResult(summary) {
@@ -478,7 +528,7 @@
     verdict.className = `exam-verdict ${summary.passed ? "pass" : "fail"}`;
     el("exam-result-score").textContent = `${summary.correctCount} / ${summary.total} 正解`;
     el("exam-result-percent").textContent = `総合 ${Math.round(summary.percent * 100)}%(合格ライン60%)`;
-    el("exam-result-xp").textContent = `+${summary.xpGained} XP`;
+    el("exam-result-xp").textContent = `+${summary.xpGained} XP ・ 🪙 +${summary.coinsGained}`;
     el("exam-result-elapsed").textContent = `所要時間 ${fmtDuration(summary.elapsedSec)}`;
 
     const breakdown = el("exam-field-breakdown");
@@ -591,6 +641,264 @@
     return item;
   }
 
+  // ---------------- 宝箱 ----------------
+  function showChest(chest) {
+    el("chest-emoji").textContent = chest.emoji;
+    el("chest-label").textContent = chest.label;
+    el("chest-coins").textContent = `🪙 +${chest.coins}`;
+    const box = el("chest-item");
+    if (chest.drop) {
+      const { item, isNew, refund } = chest.drop;
+      box.className = `chest-item r${item.rarity}`;
+      el("chest-item-emoji").textContent = item.emoji;
+      el("chest-item-stars").textContent = "★".repeat(item.rarity);
+      el("chest-item-name").textContent = item.name;
+      const tag = el("chest-item-tag");
+      tag.textContent = isNew ? "NEW" : `重複 🪙+${refund}`;
+      tag.className = `chest-item-tag${isNew ? "" : " dupe"}`;
+    } else {
+      box.classList.add("hidden");
+    }
+    el("chest-overlay").classList.remove("hidden");
+    vibrate([0, 50, 50, 80]);
+    renderTopbar();
+  }
+
+  // ---------------- ガチャ ----------------
+  function doGacha(multi) {
+    if (!Game.canPull(state, multi)) return;
+    const pull = Game.gachaPull(state, multi);
+    if (!pull) return;
+    vibrate([0, 30, 40, 60]);
+    renderTopbar();
+    renderCollection();
+    showGachaResult(pull);
+  }
+
+  function showGachaResult(pull) {
+    const list = el("gacha-result-list");
+    list.innerHTML = "";
+    const best = pull.results.reduce((m, r) => Math.max(m, r.item.rarity), 0);
+    el("gacha-result-title").textContent = best >= 5 ? "🎉 伝説のアイテム！" : best >= 4 ? "✨ 超レア出現！" : "✨ ガチャ結果";
+
+    pull.results.forEach((r, i) => {
+      const row = make("div", `gacha-result-row r${r.item.rarity}`);
+      row.style.animationDelay = `${i * 60}ms`;
+      row.appendChild(make("div", "gacha-result-emoji", r.item.emoji));
+      const info = make("div", "gacha-result-info");
+      info.appendChild(make("div", "gacha-result-name", r.item.name));
+      info.appendChild(make("div", "gacha-result-meta", `${"★".repeat(r.item.rarity)} ${Game.rarityLabel(r.item.rarity)}・${r.item.category}`));
+      row.appendChild(info);
+      row.appendChild(make("div", `gacha-result-tag ${r.isNew ? "is-new" : "is-dupe"}`, r.isNew ? "NEW" : `🪙+${r.refund}`));
+      list.appendChild(row);
+    });
+
+    const newCount = pull.results.filter(r => r.isNew).length;
+    const refundTotal = pull.results.reduce((s, r) => s + r.refund, 0);
+    let foot = `新しいアイテム ${newCount}個`;
+    if (refundTotal > 0) foot += ` ・ 重複の還元 🪙${refundTotal}`;
+    el("gacha-result-foot").textContent = foot;
+    el("gacha-overlay").classList.remove("hidden");
+  }
+
+  // ---------------- 図鑑 ----------------
+  function renderCollection() {
+    const c = Game.getCharacterInfo(state);
+    const g = Game.getGachaInfo();
+    el("collection-coins").textContent = c.coins;
+    el("gacha-single-cost").textContent = g.singleCost;
+    el("gacha-multi-cost").textContent = g.multiCost;
+    el("gacha-count").textContent = `これまで${state.gachaCount || 0}回`;
+
+    const summary = Game.collectionSummary(state);
+    const hasItems = summary.total > 0;
+    el("btn-gacha-single").disabled = !Game.canPull(state, false);
+    el("btn-gacha-multi").disabled = !Game.canPull(state, true);
+
+    let hint;
+    if (!hasItems) hint = "アイテムを準備中です";
+    else if (c.coins < g.singleCost) hint = `あと 🪙${g.singleCost - c.coins} で1回引けます`;
+    else if (summary.owned === summary.total) hint = "図鑑コンプリート！おめでとう🎉";
+    else hint = "重複したアイテムはコインに還元されます";
+    el("gacha-hint").textContent = hint;
+
+    const rates = el("gacha-rates-body");
+    rates.innerHTML = "";
+    [5, 4, 3, 2, 1].forEach(r => {
+      rates.appendChild(make("div", null, `★${r} ${Game.rarityLabel(r)} … ${Math.round(g.rates[r] * 100)}%`));
+    });
+    rates.appendChild(make("div", null, `10回引きは★3以上が1つ以上出ます。`));
+    rates.appendChild(make("div", null, `重複時の還元 … ★1:${g.dupeRefund[1]} / ★3:${g.dupeRefund[3]} / ★5:${g.dupeRefund[5]} コイン`));
+
+    el("collection-progress").textContent = `${summary.owned} / ${summary.total}(${summary.percent}%)`;
+    el("collection-bar").style.width = `${summary.percent}%`;
+
+    const rarityBox = el("collection-rarity");
+    rarityBox.innerHTML = "";
+    [1, 2, 3, 4, 5].forEach(r => {
+      const d = summary.byRarity[r];
+      if (!d.total) return;
+      rarityBox.appendChild(make("span", `collection-rarity-chip r${r}`, `★${r} ${d.owned}/${d.total}`));
+    });
+
+    renderRarityFilter();
+    renderItemGrid();
+    renderSeries();
+    setCollectionTab(collectionTab);
+  }
+
+  function renderRarityFilter() {
+    const box = el("rarity-filter");
+    box.innerHTML = "";
+    const opts = [{ v: 0, label: "すべて" }, { v: 5, label: "★5" }, { v: 4, label: "★4" }, { v: 3, label: "★3" }, { v: 2, label: "★2" }, { v: 1, label: "★1" }];
+    opts.forEach(o => {
+      const btn = make("button", "rarity-filter-btn" + (rarityFilter === o.v ? " active" : ""), o.label);
+      btn.addEventListener("click", () => {
+        rarityFilter = o.v;
+        renderRarityFilter();
+        renderItemGrid();
+      });
+      box.appendChild(btn);
+    });
+  }
+
+  function renderItemGrid() {
+    const grid = el("item-grid");
+    grid.innerHTML = "";
+    let list = Game.itemsForCatalog(state);
+    if (rarityFilter) list = list.filter(x => x.item.rarity === rarityFilter);
+    if (!list.length) {
+      const empty = make("div", "review-empty item-grid-empty", "まだアイテムがありません。");
+      grid.appendChild(empty);
+      return;
+    }
+    list.forEach(({ item, owned, count, unseen }) => {
+      const cell = make("button", `item-cell r${item.rarity} ${owned ? "owned" : "locked"}`);
+      cell.appendChild(make("div", "item-cell-emoji", owned ? item.emoji : "❓"));
+      cell.appendChild(make("div", "item-cell-stars", "★".repeat(item.rarity)));
+      if (owned && count > 1) cell.appendChild(make("div", "item-cell-count", `×${count}`));
+      if (unseen) cell.appendChild(make("em", "item-cell-new", "NEW"));
+      if (owned) {
+        cell.addEventListener("click", () => openItemDetail(item.id));
+      } else {
+        cell.disabled = true;
+      }
+      grid.appendChild(cell);
+    });
+  }
+
+  function renderSeries() {
+    const box = el("collection-series");
+    box.innerHTML = "";
+    const list = Game.seriesProgress(state);
+    if (!list.length) {
+      box.appendChild(make("div", "review-empty", "ストーリーを準備中です。"));
+      return;
+    }
+    list.forEach(s => {
+      const card = make("div", "series-card" + (s.isComplete ? " complete" : ""));
+      const head = make("div", "series-head");
+      head.appendChild(make("div", "series-emoji", s.emoji));
+      head.appendChild(make("div", "series-name", s.name));
+      head.appendChild(make("div", "series-progress", `${s.ownedCount}/${s.total}`));
+      card.appendChild(head);
+
+      const chips = make("div", "series-items");
+      s.items.forEach(item => {
+        const owned = Game.ownsItem(state, item.id);
+        const chip = make("div", `series-chip${owned ? "" : " locked"}`, owned ? item.emoji : "❓");
+        chip.title = owned ? item.name : "未入手";
+        chips.appendChild(chip);
+      });
+      card.appendChild(chips);
+
+      const story = make("div", "series-story");
+      s.unlockedStory.forEach(line => story.appendChild(make("div", "series-story-line", line)));
+      if (s.isComplete && s.completeStory) {
+        story.appendChild(make("div", "series-story-line complete-line", s.completeStory));
+      }
+      if (s.ownedCount < s.total) {
+        story.appendChild(make("div", "series-story-locked", `あと${s.total - s.ownedCount}個集めると続きが読めます`));
+      }
+      card.appendChild(story);
+      box.appendChild(card);
+    });
+  }
+
+  function setCollectionTab(tab) {
+    collectionTab = tab;
+    document.querySelectorAll(".collection-tab").forEach(b => b.classList.toggle("active", b.dataset.ctab === tab));
+    el("collection-catalog").classList.toggle("hidden", tab !== "catalog");
+    el("collection-series").classList.toggle("hidden", tab !== "series");
+  }
+
+  // ---------------- アイテム詳細 ----------------
+  function openItemDetail(itemId) {
+    const item = Game.getItem(itemId);
+    if (!item) return;
+    detailItemId = itemId;
+
+    const card = document.querySelector("#item-overlay .item-detail-card");
+    card.className = `item-detail-card r${item.rarity}`;
+    el("item-detail-emoji").textContent = item.emoji;
+    el("item-detail-stars").textContent = "★".repeat(item.rarity);
+    el("item-detail-name").textContent = item.name;
+    el("item-detail-cat").textContent = `${Game.rarityLabel(item.rarity)}・${item.category}`;
+    el("item-detail-flavor").textContent = item.flavor;
+
+    const effectEl = el("item-detail-effect");
+    if (item.effect) {
+      effectEl.textContent = `お守り効果: ${item.effect.label}`;
+      effectEl.classList.remove("hidden");
+    } else {
+      effectEl.classList.add("hidden");
+    }
+
+    const seriesEl = el("item-detail-series");
+    const series = Game.seriesProgress(state).find(s => s.itemIds.includes(item.id));
+    if (series) {
+      seriesEl.textContent = `${series.emoji} ${series.name}(${series.ownedCount}/${series.total})`;
+      seriesEl.classList.remove("hidden");
+    } else {
+      seriesEl.classList.add("hidden");
+    }
+
+    el("item-detail-count").textContent = `所持数 ${state.ownedItems[item.id] || 0}`;
+
+    const avatarBtn = el("btn-set-avatar");
+    if (item.avatar) {
+      const isCurrent = state.avatarItemId === item.id;
+      avatarBtn.textContent = isCurrent ? "アバター設定中" : "アバターにする";
+      avatarBtn.classList.toggle("is-active", isCurrent);
+      avatarBtn.classList.remove("hidden");
+    } else {
+      avatarBtn.classList.add("hidden");
+    }
+
+    const charmBtn = el("btn-set-charm");
+    if (item.effect) {
+      const isCurrent = state.equippedCharm === item.id;
+      charmBtn.textContent = isCurrent ? "お守り装備中" : "お守りにする";
+      charmBtn.classList.toggle("is-active", isCurrent);
+      charmBtn.classList.remove("hidden");
+    } else {
+      charmBtn.classList.add("hidden");
+    }
+
+    // 開いたら NEW バッジを消す
+    if ((state.unseenItems || []).includes(item.id)) {
+      Game.markItemsSeen(state, [item.id]);
+      renderTopbar();
+      renderItemGrid();
+    }
+    el("item-overlay").classList.remove("hidden");
+  }
+
+  function closeItemDetail() {
+    el("item-overlay").classList.add("hidden");
+    detailItemId = null;
+  }
+
   // ---------------- ステータス ----------------
   function renderStatus() {
     const c = Game.getCharacterInfo(state);
@@ -604,6 +912,15 @@
     el("status-streak").textContent = c.streak;
     el("status-combo").textContent = c.maxCombo;
     el("setting-vibration").checked = !!(state.settings && state.settings.vibration);
+
+    const avatarItem = state.avatarItemId ? Game.getItem(state.avatarItemId) : null;
+    el("equip-avatar").textContent = avatarItem && Game.ownsItem(state, avatarItem.id)
+      ? `${avatarItem.emoji} ${avatarItem.name}` : "レベルに応じた姿";
+    const charmItem = state.equippedCharm ? Game.getItem(state.equippedCharm) : null;
+    el("equip-charm").textContent = charmItem && Game.ownsItem(state, charmItem.id)
+      ? `${charmItem.emoji} ${charmItem.effect.label}` : "なし";
+    el("btn-clear-avatar").classList.toggle("hidden", !avatarItem);
+    el("btn-clear-charm").classList.toggle("hidden", !charmItem);
 
     const fieldBox = el("status-field-accuracy");
     fieldBox.innerHTML = "";
@@ -684,8 +1001,53 @@
       if (e.target.checked) vibrate(30);
     });
 
-    el("levelup-overlay").addEventListener("click", () => {
-      el("levelup-overlay").classList.add("hidden");
+    el("levelup-overlay").addEventListener("click", () => dismissOverlay("levelup-overlay"));
+    el("chest-overlay").addEventListener("click", () => dismissOverlay("chest-overlay"));
+
+    el("btn-goto-collection").addEventListener("click", () => goto("collection"));
+    el("btn-streak-chest").addEventListener("click", () => {
+      const chest = Game.claimStreakChest(state);
+      if (!chest) return;
+      renderTopbar();
+      renderHome();
+      enqueueOverlay(() => showChest(chest));
+    });
+
+    el("btn-gacha-single").addEventListener("click", () => doGacha(false));
+    el("btn-gacha-multi").addEventListener("click", () => doGacha(true));
+    el("btn-gacha-close").addEventListener("click", () => {
+      el("gacha-overlay").classList.add("hidden");
+      renderCollection();
+    });
+    document.querySelectorAll(".collection-tab").forEach(btn => {
+      btn.addEventListener("click", () => setCollectionTab(btn.dataset.ctab));
+    });
+
+    el("btn-item-close").addEventListener("click", closeItemDetail);
+    el("item-overlay").addEventListener("click", e => {
+      if (e.target === el("item-overlay")) closeItemDetail();
+    });
+    el("btn-set-avatar").addEventListener("click", () => {
+      if (!detailItemId) return;
+      const next = state.avatarItemId === detailItemId ? null : detailItemId;
+      Game.setAvatar(state, next);
+      renderTopbar();
+      openItemDetail(detailItemId);
+    });
+    el("btn-set-charm").addEventListener("click", () => {
+      if (!detailItemId) return;
+      const next = state.equippedCharm === detailItemId ? null : detailItemId;
+      Game.setCharm(state, next);
+      openItemDetail(detailItemId);
+    });
+    el("btn-clear-avatar").addEventListener("click", () => {
+      Game.setAvatar(state, null);
+      renderTopbar();
+      renderStatus();
+    });
+    el("btn-clear-charm").addEventListener("click", () => {
+      Game.setCharm(state, null);
+      renderStatus();
     });
 
     el("btn-reset").addEventListener("click", () => {

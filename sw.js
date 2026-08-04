@@ -1,6 +1,6 @@
 // アプリを更新したら必ずこの数字を上げること。
 // キャッシュ名が変わることで install 時に全アセットを取得し直し、古いキャッシュを破棄する。
-const CACHE_VERSION = "v3";
+const CACHE_VERSION = "v4";
 const CACHE_NAME = `itpass-adventure-${CACHE_VERSION}`;
 
 const ASSETS = [
@@ -9,6 +9,7 @@ const ASSETS = [
   "./manifest.json",
   "./css/style.css",
   "./js/questions.js",
+  "./js/items.js",
   "./js/storage.js",
   "./js/game.js",
   "./js/app.js",

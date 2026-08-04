@@ -1,4 +1,4 @@
-// ITパスポート冒険記 - ゲームロジック(RPG成長 + すごろくマップ + 模擬試験)
+// ITパスポート冒険記 - ゲームロジック(RPG成長 + すごろくマップ + 模擬試験 + コイン/ガチャ/図鑑)
 const Game = (() => {
   const QUESTIONS_PER_NODE = 6;
   const QUESTIONS_PER_BOSS = 10;
@@ -7,23 +7,44 @@ const Game = (() => {
   // 本番のITパスポート試験は100問/120分、
   // 総合600点以上かつ3分野すべて300点以上(=総合60%・各分野30%)で合格。
   const EXAM_MODES = {
-    full: {
-      key: "full",
-      label: "本番形式",
-      total: 100,
-      minutes: 120,
-      dist: { strategy: 35, management: 20, technology: 45 },
-    },
-    mini: {
-      key: "mini",
-      label: "短縮版",
-      total: 50,
-      minutes: 60,
-      dist: { strategy: 18, management: 10, technology: 22 },
-    },
+    full: { key: "full", label: "本番形式", total: 100, minutes: 120, dist: { strategy: 35, management: 20, technology: 45 } },
+    mini: { key: "mini", label: "短縮版", total: 50, minutes: 60, dist: { strategy: 18, management: 10, technology: 22 } },
   };
   const EXAM_PASS_OVERALL = 0.6;
   const EXAM_PASS_FIELD = 0.3;
+
+  // --- コイン設計 ---
+  // 1バトル(6問)でおよそ28〜48コイン。ガチャ1回150コインなので、だいたい5回前後のバトルで1回引ける。
+  const COIN = {
+    perCorrect: 3,
+    perCorrectReview: 2,
+    perCorrectExam: 1,
+    topicClear: 10,
+    topicFirstClear: 30,
+    bossClear: 50,
+    bossFirstClear: 100,
+    examPass: 200,
+  };
+
+  // --- ガチャ設計 ---
+  const GACHA = {
+    singleCost: 150,
+    multiCost: 1350,   // 10連(1回分お得 + ★3以上が1つ確定)
+    multiCount: 10,
+    rates: { 1: 0.40, 2: 0.30, 3: 0.20, 4: 0.08, 5: 0.02 },
+    dupeRefund: { 1: 15, 2: 30, 3: 60, 4: 120, 5: 250 },
+  };
+  const RARITY_LABELS = { 1: "ふつう", 2: "めずらしい", 3: "レア", 4: "超レア", 5: "伝説" };
+
+  // --- 宝箱設計 ---
+  const CHESTS = {
+    battle: { label: "バトルの宝箱", emoji: "🎁", coins: [30, 70], itemChance: 0.25, minRarity: 1 },
+    map:    { label: "マップの宝箱", emoji: "💎", coins: [80, 150], itemChance: 0.50, minRarity: 2 },
+    streak: { label: "継続の宝箱", emoji: "🔥", coins: [50, 100], itemChance: 0.35, minRarity: 2 },
+    exam:   { label: "合格の宝箱", emoji: "🏆", coins: [200, 350], itemChance: 1.00, minRarity: 3 },
+  };
+  const BATTLE_CHEST_CHANCE = 0.25;      // バトルクリア時の基本ドロップ率
+  const BATTLE_CHEST_PERFECT_BONUS = 0.15; // 全問正解ならさらに上乗せ
 
   const AVATAR_TIERS = [
     { min: 1, max: 2, emoji: "🥚", title: "ITの卵" },
@@ -39,18 +60,51 @@ const Game = (() => {
     return 40 + (level - 1) * 20;
   }
 
+  // ---------------- アイテム関連 ----------------
+  function allItems() {
+    return typeof ITEMS !== "undefined" ? ITEMS : [];
+  }
+  function allSeries() {
+    return typeof ITEM_SERIES !== "undefined" ? ITEM_SERIES : [];
+  }
+  function getItem(id) {
+    return allItems().find(i => i.id === id) || null;
+  }
+  function ownsItem(state, id) {
+    return (state.ownedItems[id] || 0) > 0;
+  }
+  function rarityLabel(r) {
+    return RARITY_LABELS[r] || "";
+  }
+
+  // 装備中のお守りの効果量(該当タイプでなければ0)
+  function charmBonus(state, type) {
+    if (!state.equippedCharm) return 0;
+    const item = getItem(state.equippedCharm);
+    if (!item || !item.effect || item.effect.type !== type) return 0;
+    if (!ownsItem(state, item.id)) return 0;
+    return item.effect.value || 0;
+  }
+
   function getCharacterInfo(state) {
     const tier = AVATAR_TIERS.find(t => state.level >= t.min && state.level <= t.max) || AVATAR_TIERS[0];
     const need = xpNeeded(state.level);
+    // アバターにアイテムを設定していればその絵文字を優先する
+    let emoji = tier.emoji;
+    const avatarItem = state.avatarItemId ? getItem(state.avatarItemId) : null;
+    if (avatarItem && ownsItem(state, avatarItem.id)) emoji = avatarItem.emoji;
     return {
       level: state.level,
       xp: state.xp,
       xpNeeded: need,
       xpPercent: Math.min(100, Math.round((state.xp / need) * 100)),
-      emoji: tier.emoji,
+      emoji,
+      tierEmoji: tier.emoji,
+      avatarName: avatarItem && ownsItem(state, avatarItem.id) ? avatarItem.name : null,
       title: tier.title,
       streak: state.streak,
       maxCombo: state.maxCombo || 0,
+      coins: state.coins || 0,
       totalCorrect: state.totalCorrect,
       totalAnswered: state.totalAnswered,
       accuracy: state.totalAnswered ? Math.round((state.totalCorrect / state.totalAnswered) * 100) : 0,
@@ -59,14 +113,24 @@ const Game = (() => {
 
   // XPを加算しレベルアップを処理する(複数レベル上がる場合にも対応)
   function addXp(state, amount) {
-    state.xp += amount;
+    const bonus = charmBonus(state, "xp");
+    const gained = Math.round(amount * (1 + bonus));
+    state.xp += gained;
     let levelsGained = 0;
     while (state.xp >= xpNeeded(state.level)) {
       state.xp -= xpNeeded(state.level);
       state.level += 1;
       levelsGained += 1;
     }
-    return { leveledUp: levelsGained > 0, levelsGained, newLevel: state.level };
+    return { leveledUp: levelsGained > 0, levelsGained, newLevel: state.level, xpGained: gained, xpBonusApplied: bonus > 0 };
+  }
+
+  function addCoins(state, amount) {
+    const bonus = charmBonus(state, "coin");
+    const gained = Math.round(amount * (1 + bonus));
+    state.coins = (state.coins || 0) + gained;
+    state.totalCoinsEarned = (state.totalCoinsEarned || 0) + gained;
+    return { coinsGained: gained, coinBonusApplied: bonus > 0 };
   }
 
   function shuffle(arr) {
@@ -76,6 +140,10 @@ const Game = (() => {
       [a[i], a[j]] = [a[j], a[i]];
     }
     return a;
+  }
+
+  function randInt(min, max) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
   }
 
   // 重み付き非復元抽出(Efraimidis-Spirakis)。間違えた問題ほど出やすくする。
@@ -89,41 +157,58 @@ const Game = (() => {
     return Object.keys(WORLD_META).sort((a, b) => WORLD_META[a].order - WORLD_META[b].order);
   }
 
-  // すごろくマップを構築する。各ワールドはトピックノードの列 + 末尾のボスノード。
+  // ---------------- マップ ----------------
+  // トピックノードの列 + 3トピックごとの宝箱マス + 末尾のボスノード。
+  // 宝箱は進行の妨げにならないよう、次のトピックの解放条件には影響させない。
   function getMapData(state) {
     const worlds = worldKeys();
     let prevWorldBossCleared = true; // 最初のワールドは常に解放
     return worlds.map(worldKey => {
       const topics = TOPIC_ORDER[worldKey];
-      let prevCleared = prevWorldBossCleared;
-      const nodes = topics.map((topicKey, idx) => {
+      let prevTopicCleared = prevWorldBossCleared;
+      const nodes = [];
+
+      topics.forEach((topicKey, idx) => {
         const progress = state.clearedTopics[topicKey];
         const cleared = !!(progress && progress.stars > 0);
-        const node = {
+        nodes.push({
           type: "topic",
           world: worldKey,
           topic: topicKey,
           label: TOPIC_LABELS[topicKey],
-          index: idx,
-          unlocked: prevCleared,
+          unlocked: prevTopicCleared,
           cleared,
           stars: progress ? progress.stars : 0,
-        };
-        prevCleared = cleared;
-        return node;
+        });
+        prevTopicCleared = cleared;
+
+        if ((idx + 1) % 3 === 0 && idx + 1 < topics.length) {
+          const chestKey = `${worldKey}-${idx + 1}`;
+          nodes.push({
+            type: "chest",
+            world: worldKey,
+            topic: null,
+            chestKey,
+            label: "宝箱",
+            unlocked: cleared,
+            cleared: !!state.openedChests[chestKey],
+            stars: 0,
+          });
+        }
       });
-      const allTopicsCleared = nodes.every(n => n.cleared);
+
+      const allTopicsCleared = nodes.filter(n => n.type === "topic").every(n => n.cleared);
       const bossCleared = !!state.clearedBoss[worldKey];
       nodes.push({
         type: "boss",
         world: worldKey,
         topic: null,
         label: `${WORLD_META[worldKey].label} ボス`,
-        index: nodes.length,
         unlocked: allTopicsCleared,
         cleared: bossCleared,
         stars: bossCleared ? 3 : 0,
       });
+
       const worldUnlocked = prevWorldBossCleared;
       prevWorldBossCleared = bossCleared;
       return {
@@ -142,7 +227,6 @@ const Game = (() => {
   function questionsForTopic(topicKey) {
     return QUESTIONS.filter(q => q.topic === topicKey);
   }
-
   function questionsForWorld(worldKey) {
     return QUESTIONS.filter(q => q.field === worldKey);
   }
@@ -165,15 +249,13 @@ const Game = (() => {
   function startTopicBattle(state, topicKey) {
     const pool = questionsForTopic(topicKey);
     const n = Math.min(QUESTIONS_PER_NODE, pool.length);
-    const picked = weightedSample(pool, q => netWrongWeight(state, q), n);
-    return shuffle(picked).map(withShuffledChoices);
+    return shuffle(weightedSample(pool, q => netWrongWeight(state, q), n)).map(withShuffledChoices);
   }
 
   function startBossBattle(state, worldKey) {
     const pool = questionsForWorld(worldKey);
     const n = Math.min(QUESTIONS_PER_BOSS, pool.length);
-    const picked = weightedSample(pool, q => netWrongWeight(state, q), n);
-    return shuffle(picked).map(withShuffledChoices);
+    return shuffle(weightedSample(pool, q => netWrongWeight(state, q), n)).map(withShuffledChoices);
   }
 
   function startReviewBattle(state) {
@@ -188,15 +270,12 @@ const Game = (() => {
     let picked = [];
     Object.keys(mode.dist).forEach(field => {
       const pool = questionsForWorld(field);
-      const want = Math.min(mode.dist[field], pool.length);
-      picked = picked.concat(shuffle(pool).slice(0, want));
+      picked = picked.concat(shuffle(pool).slice(0, Math.min(mode.dist[field], pool.length)));
     });
     return shuffle(picked).map(withShuffledChoices);
   }
 
-  function getExamModes() {
-    return EXAM_MODES;
-  }
+  function getExamModes() { return EXAM_MODES; }
 
   function recordAnswers(state, results) {
     results.forEach(r => {
@@ -221,7 +300,129 @@ const Game = (() => {
     if (combo > (state.maxCombo || 0)) state.maxCombo = combo;
   }
 
-  // results: [{id, correct}]
+  // ---------------- 宝箱 ----------------
+  function grantItem(state, minRarity) {
+    const pool = allItems().filter(i => i.rarity >= minRarity);
+    if (!pool.length) return null;
+    // レアリティ重みは通常のガチャ確率を流用しつつ、下限レアリティで絞る
+    const rarity = rollRarity(minRarity);
+    const candidates = pool.filter(i => i.rarity === rarity);
+    const item = (candidates.length ? candidates : pool)[Math.floor(Math.random() * (candidates.length ? candidates.length : pool.length))];
+    const isNew = !ownsItem(state, item.id);
+    state.ownedItems[item.id] = (state.ownedItems[item.id] || 0) + 1;
+    let refund = 0;
+    if (!isNew) {
+      refund = GACHA.dupeRefund[item.rarity] || 0;
+      addCoins(state, refund);
+    } else if (!state.unseenItems.includes(item.id)) {
+      state.unseenItems.push(item.id);
+    }
+    return { item, isNew, refund };
+  }
+
+  // 宝箱を開ける。coins と(確率で)アイテムが手に入る。
+  function openChest(state, kind, chestKey) {
+    const def = CHESTS[kind] || CHESTS.battle;
+    if (kind === "map" && chestKey) {
+      if (state.openedChests[chestKey]) return null; // 二重開封を防ぐ
+      state.openedChests[chestKey] = true;
+    }
+    const baseCoins = randInt(def.coins[0], def.coins[1]);
+    const { coinsGained } = addCoins(state, baseCoins);
+    let drop = null;
+    if (Math.random() < def.itemChance) {
+      drop = grantItem(state, def.minRarity);
+    }
+    Storage.save(state);
+    return { kind, label: def.label, emoji: def.emoji, coins: coinsGained, drop };
+  }
+
+  function battleChestChance(state, perfect) {
+    return BATTLE_CHEST_CHANCE + (perfect ? BATTLE_CHEST_PERFECT_BONUS : 0) + charmBonus(state, "chest");
+  }
+
+  // 連続学習日数のご褒美。1日1回だけ受け取れる。
+  function claimStreakChest(state) {
+    const today = Storage.todayStr();
+    if (state.streakChestDate === today) return null;
+    state.streakChestDate = today;
+    return openChest(state, "streak");
+  }
+
+  function hasStreakChestReady(state) {
+    return state.streakChestDate !== Storage.todayStr();
+  }
+
+  // ---------------- ガチャ ----------------
+  function rollRarity(minRarity) {
+    const min = minRarity || 1;
+    const entries = Object.keys(GACHA.rates)
+      .map(Number)
+      .filter(r => r >= min && allItems().some(i => i.rarity === r));
+    if (!entries.length) return min;
+    const total = entries.reduce((s, r) => s + GACHA.rates[r], 0);
+    let x = Math.random() * total;
+    for (const r of entries) {
+      x -= GACHA.rates[r];
+      if (x <= 0) return r;
+    }
+    return entries[entries.length - 1];
+  }
+
+  function pullOne(state, minRarity) {
+    const rarity = rollRarity(minRarity);
+    const pool = allItems().filter(i => i.rarity === rarity);
+    if (!pool.length) return null;
+    const item = pool[Math.floor(Math.random() * pool.length)];
+    const isNew = !ownsItem(state, item.id);
+    state.ownedItems[item.id] = (state.ownedItems[item.id] || 0) + 1;
+    let refund = 0;
+    if (!isNew) {
+      refund = GACHA.dupeRefund[item.rarity] || 0;
+      state.coins += refund; // 還元分にお守りボーナスは掛けない
+    } else if (!state.unseenItems.includes(item.id)) {
+      state.unseenItems.push(item.id);
+    }
+    return { item, isNew, refund };
+  }
+
+  function canPull(state, multi) {
+    const cost = multi ? GACHA.multiCost : GACHA.singleCost;
+    return (state.coins || 0) >= cost && allItems().length > 0;
+  }
+
+  function gachaPull(state, multi) {
+    const cost = multi ? GACHA.multiCost : GACHA.singleCost;
+    if ((state.coins || 0) < cost) return null;
+    state.coins -= cost;
+    state.gachaCount = (state.gachaCount || 0) + 1;
+
+    const count = multi ? GACHA.multiCount : 1;
+    const results = [];
+    for (let i = 0; i < count; i++) results.push(pullOne(state, 1));
+    const valid = results.filter(Boolean);
+
+    // 10連は★3以上を1つ確定にする
+    if (multi && valid.length && !valid.some(r => r.item.rarity >= 3)) {
+      const replaced = pullOne(state, 3);
+      if (replaced) valid[valid.length - 1] = replaced;
+    }
+
+    Storage.save(state);
+    return { cost, results: valid };
+  }
+
+  function getGachaInfo() {
+    return {
+      singleCost: GACHA.singleCost,
+      multiCost: GACHA.multiCost,
+      multiCount: GACHA.multiCount,
+      rates: GACHA.rates,
+      dupeRefund: GACHA.dupeRefund,
+    };
+  }
+
+  // ---------------- バトル終了処理 ----------------
   function finishTopicBattle(state, topicKey, results, maxCombo) {
     recordAnswers(state, results);
     updateMaxCombo(state, maxCombo || 0);
@@ -234,25 +435,25 @@ const Game = (() => {
     const improved = !prev || stars > prev.stars;
 
     if (improved) {
-      state.clearedTopics[topicKey] = {
-        stars,
-        bestCorrect: correctCount,
-        bestTotal: results.length,
-        attempts: (prev ? prev.attempts : 0) + 1,
-      };
+      state.clearedTopics[topicKey] = { stars, bestCorrect: correctCount, bestTotal: results.length, attempts: (prev ? prev.attempts : 0) + 1 };
     } else if (prev) {
       prev.attempts += 1;
     }
 
-    let xpGained = correctCount * 10;
-    if (isFirstClear) xpGained += 20;
-    if (ratio === 1) xpGained += 15;
+    let baseXp = correctCount * 10;
+    if (isFirstClear) baseXp += 20;
+    if (ratio === 1) baseXp += 15;
 
-    const levelResult = addXp(state, xpGained);
+    let baseCoins = correctCount * COIN.perCorrect;
+    if (stars > 0) baseCoins += isFirstClear ? COIN.topicFirstClear : COIN.topicClear;
+
+    const levelResult = addXp(state, baseXp);
+    const coinResult = addCoins(state, baseCoins);
+    const chest = (stars > 0 && Math.random() < battleChestChance(state, ratio === 1)) ? openChest(state, "battle") : null;
+
     Storage.touchStreak(state);
     Storage.save(state);
-
-    return { correctCount, total: results.length, ratio, stars, cleared: stars > 0, isFirstClear, xpGained, ...levelResult };
+    return { correctCount, total: results.length, ratio, stars, cleared: stars > 0, isFirstClear, chest, ...levelResult, ...coinResult };
   }
 
   function finishBossBattle(state, worldKey, results, maxCombo) {
@@ -265,19 +466,25 @@ const Game = (() => {
     const wasAlreadyCleared = !!state.clearedBoss[worldKey];
     if (cleared) state.clearedBoss[worldKey] = true;
 
-    let xpGained = correctCount * 12;
-    if (cleared && !wasAlreadyCleared) xpGained += 60;
-    if (ratio === 1) xpGained += 30;
+    let baseXp = correctCount * 12;
+    if (cleared && !wasAlreadyCleared) baseXp += 60;
+    if (ratio === 1) baseXp += 30;
 
-    const levelResult = addXp(state, xpGained);
+    let baseCoins = correctCount * COIN.perCorrect;
+    if (cleared) baseCoins += wasAlreadyCleared ? COIN.bossClear : COIN.bossFirstClear;
+
+    const levelResult = addXp(state, baseXp);
+    const coinResult = addCoins(state, baseCoins);
+    // ボスを倒したら宝箱は確定でドロップする
+    const chest = cleared ? openChest(state, "battle") : null;
+
     Storage.touchStreak(state);
     Storage.save(state);
-
-    return { correctCount, total: results.length, ratio, cleared, isFirstClear: cleared && !wasAlreadyCleared, xpGained, ...levelResult };
+    return { correctCount, total: results.length, ratio, cleared, isFirstClear: cleared && !wasAlreadyCleared, chest, ...levelResult, ...coinResult };
   }
 
   function finishReviewBattle(state, results, maxCombo) {
-    // 復習は解放条件に影響しない。XP獲得と苦手カウントの解消が目的。
+    // 復習は解放条件に影響しない。XP/コイン獲得と苦手カウントの解消が目的。
     results.forEach(r => {
       if (r.correct) {
         state.correctCounts[r.id] = (state.correctCounts[r.id] || 0) + 1;
@@ -291,11 +498,13 @@ const Game = (() => {
     updateMaxCombo(state, maxCombo || 0);
 
     const correctCount = results.filter(r => r.correct).length;
-    const xpGained = correctCount * 8;
-    const levelResult = addXp(state, xpGained);
+    const levelResult = addXp(state, correctCount * 8);
+    const coinResult = addCoins(state, correctCount * COIN.perCorrectReview);
+    const chest = Math.random() < battleChestChance(state, correctCount === results.length) ? openChest(state, "battle") : null;
+
     Storage.touchStreak(state);
     Storage.save(state);
-    return { correctCount, total: results.length, xpGained, ...levelResult };
+    return { correctCount, total: results.length, chest, ...levelResult, ...coinResult };
   }
 
   // results: [{id, field, correct}] 未回答は correct:false として渡す
@@ -320,9 +529,14 @@ const Game = (() => {
 
     const passed = percent >= EXAM_PASS_OVERALL && Object.values(fields).every(f => f.passed);
 
-    let xpGained = correctCount * 5;
-    if (passed) xpGained += 100;
-    const levelResult = addXp(state, xpGained);
+    let baseXp = correctCount * 5;
+    if (passed) baseXp += 100;
+    let baseCoins = correctCount * COIN.perCorrectExam;
+    if (passed) baseCoins += COIN.examPass;
+
+    const levelResult = addXp(state, baseXp);
+    const coinResult = addCoins(state, baseCoins);
+    const chest = passed ? openChest(state, "exam") : null;
 
     state.examHistory.unshift({
       date: Storage.todayStr(),
@@ -339,17 +553,16 @@ const Game = (() => {
 
     Storage.touchStreak(state);
     Storage.save(state);
-
-    return { correctCount, total: results.length, percent, fields, passed, xpGained, elapsedSec, mode, ...levelResult };
+    return { correctCount, total: results.length, percent, fields, passed, elapsedSec, mode, chest, ...levelResult, ...coinResult };
   }
 
+  // ---------------- 集計 ----------------
   function weakTopicSummary(state) {
     return Object.keys(state.clearedTopics)
       .map(topicKey => ({ topicKey, label: TOPIC_LABELS[topicKey], ...state.clearedTopics[topicKey] }))
       .sort((a, b) => a.stars - b.stars || b.attempts - a.attempts);
   }
 
-  // 分野別の正答率(これまでの累計)
   function fieldAccuracy(state) {
     return worldKeys().map(field => {
       const qs = questionsForWorld(field);
@@ -371,7 +584,6 @@ const Game = (() => {
     });
   }
 
-  // 間違えたまま克服できていない問題の一覧
   function wrongQuestions(state) {
     return QUESTIONS
       .filter(q => (state.wrongCounts[q.id] || 0) > 0)
@@ -392,12 +604,83 @@ const Game = (() => {
     };
   }
 
+  // 図鑑の集計。カテゴリ別・レアリティ別の入手状況を返す。
+  function collectionSummary(state) {
+    const items = allItems();
+    const owned = items.filter(i => ownsItem(state, i.id));
+    const byRarity = {};
+    [1, 2, 3, 4, 5].forEach(r => {
+      const all = items.filter(i => i.rarity === r);
+      byRarity[r] = { total: all.length, owned: all.filter(i => ownsItem(state, i.id)).length, label: RARITY_LABELS[r] };
+    });
+    return {
+      total: items.length,
+      owned: owned.length,
+      percent: items.length ? Math.round((owned.length / items.length) * 100) : 0,
+      byRarity,
+      unseenCount: (state.unseenItems || []).length,
+    };
+  }
+
+  // シリーズごとの進捗と、解放済みの物語を返す
+  function seriesProgress(state) {
+    return allSeries().map(s => {
+      const items = s.itemIds.map(id => getItem(id)).filter(Boolean);
+      const ownedItemsInSeries = items.filter(i => ownsItem(state, i.id));
+      const ownedCount = ownedItemsInSeries.length;
+      return {
+        ...s,
+        items,
+        ownedCount,
+        total: items.length,
+        isComplete: ownedCount === items.length && items.length > 0,
+        completeStory: s.complete || "", // JSON側の complete は「完成時の締めの文章」
+        // 集めた数の分だけ物語が解放される
+        unlockedStory: (s.story || []).slice(0, ownedCount),
+      };
+    });
+  }
+
+  function itemsForCatalog(state) {
+    return allItems()
+      .slice()
+      .sort((a, b) => b.rarity - a.rarity || a.id.localeCompare(b.id))
+      .map(i => ({ item: i, owned: ownsItem(state, i.id), count: state.ownedItems[i.id] || 0, unseen: (state.unseenItems || []).includes(i.id) }));
+    }
+
+  function avatarCandidates(state) {
+    return allItems().filter(i => i.avatar && ownsItem(state, i.id));
+  }
+
+  function charmCandidates(state) {
+    return allItems().filter(i => i.effect && ownsItem(state, i.id));
+  }
+
+  function setAvatar(state, itemId) {
+    state.avatarItemId = itemId;
+    Storage.save(state);
+  }
+
+  function setCharm(state, itemId) {
+    state.equippedCharm = itemId;
+    Storage.save(state);
+  }
+
+  function markItemsSeen(state, ids) {
+    state.unseenItems = (state.unseenItems || []).filter(id => !ids.includes(id));
+    Storage.save(state);
+  }
+
   return {
-    getCharacterInfo, addXp, getMapData,
+    getCharacterInfo, addXp, addCoins, getMapData,
     startTopicBattle, startBossBattle, startReviewBattle, startExam,
     finishTopicBattle, finishBossBattle, finishReviewBattle, finishExam,
     weakTopicSummary, fieldAccuracy, wrongQuestions, overallProgress,
     worldKeys, xpNeeded, getExamModes,
+    // コイン/宝箱/ガチャ/図鑑
+    openChest, claimStreakChest, hasStreakChestReady, gachaPull, canPull, getGachaInfo,
+    collectionSummary, seriesProgress, itemsForCatalog, avatarCandidates, charmCandidates,
+    setAvatar, setCharm, markItemsSeen, getItem, ownsItem, rarityLabel, charmBonus,
     EXAM_PASS_OVERALL, EXAM_PASS_FIELD,
   };
 })();

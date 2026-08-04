@@ -57,7 +57,26 @@ body {
 .xp-bar { height: 8px; border-radius: 999px; background: rgba(255,255,255,0.12); overflow: hidden; }
 .xp-bar-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent-green), #6ee7b7); transition: width .45s ease; }
 .xp-bar-wide { height: 12px; margin-top: 10px; width: 100%; }
+.topbar-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
 .topbar-streak { font-size: 13px; font-weight: 700; color: #fca5a5; display: flex; align-items: center; gap: 2px; }
+.topbar-coins { font-size: 13px; font-weight: 700; color: var(--accent-gold); display: flex; align-items: center; gap: 2px; font-variant-numeric: tabular-nums; }
+
+/* ---------- 継続の宝箱(ホーム) ---------- */
+.streak-chest-card {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; cursor: pointer;
+  background: linear-gradient(135deg, rgba(251,146,60,0.22), rgba(239,68,68,0.16));
+  border: 1px solid rgba(251,146,60,0.5); border-radius: 16px; padding: 14px 16px;
+  color: var(--text-light); font-family: inherit; animation: chestGlow 2s ease-in-out infinite;
+}
+@keyframes chestGlow {
+  0%,100% { box-shadow: 0 0 0 rgba(251,146,60,0); }
+  50% { box-shadow: 0 0 18px rgba(251,146,60,0.35); }
+}
+.streak-chest-emoji { font-size: 28px; }
+.streak-chest-text { display: flex; flex-direction: column; gap: 2px; }
+.streak-chest-text strong { font-size: 15px; }
+.streak-chest-text small { font-size: 11.5px; color: var(--text-dim); }
+.streak-chest-go { margin-left: auto; color: #fdba74; font-size: 18px; }
 
 /* ---------- 画面共通 ---------- */
 #app { flex: 1; display: flex; flex-direction: column; padding: 16px 16px calc(24px + var(--safe-bottom)); }
@@ -346,3 +365,197 @@ body {
 .levelup-level { font-size: 30px; font-weight: 900; margin-top: 2px; }
 .levelup-title { font-size: 14px; color: var(--text-dim); margin-top: 4px; }
 .levelup-hint { font-size: 11px; color: var(--text-mute); margin-top: 18px; }
+
+/* ---------- レアリティ配色 ---------- */
+.r1 { --rarity-color: #94a3b8; }
+.r2 { --rarity-color: #34d399; }
+.r3 { --rarity-color: #60a5fa; }
+.r4 { --rarity-color: #c084fc; }
+.r5 { --rarity-color: #fbbf24; }
+.rarity-stars { color: var(--rarity-color, var(--accent-gold)); letter-spacing: 1px; }
+
+/* ---------- マップの宝箱マス ---------- */
+.map-node.chest {
+  width: 68px; min-height: 68px; border-radius: 16px;
+  background: rgba(250,204,21,0.12); border-color: rgba(250,204,21,0.5);
+}
+.map-node.chest.cleared { border-color: rgba(255,255,255,0.18); background: rgba(255,255,255,0.04); opacity: 0.6; }
+.map-node.chest.locked { opacity: 0.35; }
+
+/* ---------- ガチャ ---------- */
+.gacha-panel {
+  background: linear-gradient(160deg, rgba(167,139,250,0.16), rgba(96,165,250,0.1));
+  border: 1px solid var(--card-border); border-radius: 18px; padding: 16px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.gacha-coin-row { display: flex; align-items: baseline; gap: 10px; }
+.gacha-coin { font-size: 15px; color: var(--accent-gold); font-weight: 700; }
+.gacha-coin strong { font-size: 20px; font-variant-numeric: tabular-nums; }
+.gacha-count { margin-left: auto; font-size: 11.5px; color: var(--text-mute); }
+.gacha-buttons { display: flex; gap: 10px; }
+.gacha-buttons .btn { display: flex; flex-direction: column; align-items: center; gap: 1px; line-height: 1.2; }
+.gacha-buttons .btn small { font-size: 11px; font-weight: 700; opacity: 0.75; }
+.gacha-buttons .btn small::before { content: "🪙"; margin-right: 2px; }
+.gacha-buttons .btn:disabled { filter: grayscale(0.7); opacity: 0.5; cursor: not-allowed; box-shadow: none; }
+.gacha-hint { font-size: 11.5px; color: var(--text-dim); text-align: center; min-height: 1em; }
+.gacha-rates { font-size: 11.5px; color: var(--text-mute); }
+.gacha-rates summary { cursor: pointer; }
+.gacha-rates-body { padding-top: 8px; line-height: 1.7; }
+
+/* ---------- 図鑑 ---------- */
+.collection-summary { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 14px; padding: 14px; }
+.collection-summary-head { display: flex; align-items: baseline; gap: 8px; font-size: 13px; margin-bottom: 8px; color: var(--text-dim); }
+.collection-summary-head strong { margin-left: auto; color: var(--text-light); font-variant-numeric: tabular-nums; }
+.collection-rarity { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.collection-rarity-chip {
+  font-size: 10.5px; font-weight: 700; padding: 3px 8px; border-radius: 999px;
+  background: rgba(255,255,255,0.06); border: 1px solid var(--card-border); color: var(--rarity-color);
+  font-variant-numeric: tabular-nums;
+}
+
+.collection-tabs { display: flex; gap: 8px; }
+.collection-tab {
+  flex: 1; padding: 9px; border-radius: 12px; font-size: 13px; font-weight: 700; cursor: pointer;
+  background: rgba(255,255,255,0.06); border: 1px solid var(--card-border); color: var(--text-dim); font-family: inherit;
+}
+.collection-tab.active { background: rgba(250,204,21,0.18); border-color: var(--accent-gold); color: var(--accent-gold); }
+
+.rarity-filter { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.rarity-filter-btn {
+  font-size: 11.5px; font-weight: 700; padding: 5px 11px; border-radius: 999px; cursor: pointer;
+  background: rgba(255,255,255,0.06); border: 1px solid var(--card-border); color: var(--text-dim); font-family: inherit;
+}
+.rarity-filter-btn.active { background: rgba(250,204,21,0.18); border-color: var(--accent-gold); color: var(--accent-gold); }
+
+.item-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.item-cell {
+  position: relative; aspect-ratio: 1; border-radius: 14px; cursor: pointer; padding: 4px;
+  background: rgba(255,255,255,0.05); border: 2px solid var(--card-border);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  font-family: inherit; color: var(--text-light);
+}
+.item-cell.owned { border-color: var(--rarity-color); background: color-mix(in srgb, var(--rarity-color) 12%, transparent); }
+.item-cell.locked { opacity: 0.45; cursor: default; }
+.item-cell-emoji { font-size: 26px; line-height: 1; }
+.item-cell.locked .item-cell-emoji { filter: grayscale(1) brightness(0.4); }
+.item-cell-stars { font-size: 8.5px; color: var(--rarity-color); letter-spacing: -0.5px; }
+.item-cell-count {
+  position: absolute; bottom: 2px; right: 4px; font-size: 9px; color: var(--text-mute); font-weight: 700;
+}
+.item-cell-new {
+  position: absolute; top: -4px; right: -4px; background: var(--danger); color: #fff;
+  font-size: 8px; font-weight: 800; padding: 1px 5px; border-radius: 999px; letter-spacing: 0.5px;
+}
+.item-grid-empty { grid-column: 1 / -1; }
+
+/* ---------- シリーズ(ストーリー) ---------- */
+.series-list { display: flex; flex-direction: column; gap: 12px; }
+.series-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px; padding: 16px; }
+.series-card.complete { border-color: var(--accent-gold); background: rgba(250,204,21,0.08); }
+.series-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.series-emoji { font-size: 24px; }
+.series-name { font-size: 15px; font-weight: 700; }
+.series-progress { margin-left: auto; font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.series-items { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+.series-chip {
+  font-size: 18px; width: 38px; height: 38px; border-radius: 10px; display: flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,0.05); border: 1px solid var(--card-border);
+}
+.series-chip.locked { filter: grayscale(1) brightness(0.4); opacity: 0.5; }
+.series-story { display: flex; flex-direction: column; gap: 8px; }
+.series-story-line {
+  font-size: 12.5px; line-height: 1.75; color: var(--text-dim);
+  padding-left: 12px; border-left: 2px solid rgba(255,255,255,0.18);
+}
+.series-story-line.complete-line { border-left-color: var(--accent-gold); color: #fde68a; font-weight: 600; }
+.series-story-locked { font-size: 12px; color: var(--text-mute); padding-left: 12px; }
+
+/* ---------- 宝箱の演出 ---------- */
+.chest-card {
+  background: linear-gradient(160deg, #4c1d95, #7c2d12);
+  border: 2px solid var(--accent-gold); border-radius: 24px; padding: 30px 28px; text-align: center;
+  box-shadow: 0 0 40px rgba(250,204,21,0.28); animation: levelupIn .45s cubic-bezier(.2,1.3,.4,1);
+  max-width: 320px;
+}
+.chest-emoji { font-size: 56px; animation: chestShake .6s ease-in-out; }
+@keyframes chestShake {
+  0%,100% { transform: rotate(0deg) scale(1); }
+  20% { transform: rotate(-12deg) scale(1.1); }
+  40% { transform: rotate(12deg) scale(1.1); }
+  60% { transform: rotate(-8deg) scale(1.05); }
+  80% { transform: rotate(8deg) scale(1.05); }
+}
+.chest-label { font-size: 13px; color: var(--text-dim); margin-top: 4px; }
+.chest-coins { font-size: 22px; font-weight: 800; color: var(--accent-gold); margin-top: 8px; font-variant-numeric: tabular-nums; }
+.chest-item {
+  margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.2);
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+}
+.chest-item-emoji { font-size: 40px; }
+.chest-item-stars { font-size: 13px; color: var(--rarity-color, var(--accent-gold)); }
+.chest-item-name { font-size: 14px; font-weight: 700; }
+.chest-item-tag { font-size: 10px; font-weight: 800; color: #fff; background: var(--danger); padding: 1px 8px; border-radius: 999px; }
+.chest-item-tag.dupe { background: rgba(255,255,255,0.2); }
+
+/* ---------- ガチャ結果 ---------- */
+.gacha-result-card {
+  background: linear-gradient(160deg, #312e81, #4c1d95);
+  border: 2px solid var(--accent-purple); border-radius: 22px; padding: 22px 18px; text-align: center;
+  max-width: 380px; width: 100%; max-height: 82vh; overflow-y: auto;
+  animation: levelupIn .45s cubic-bezier(.2,1.3,.4,1);
+  display: flex; flex-direction: column; gap: 14px;
+}
+.gacha-result-title { font-size: 17px; font-weight: 800; color: var(--accent-gold); }
+.gacha-result-list { display: flex; flex-direction: column; gap: 8px; }
+.gacha-result-row {
+  display: flex; align-items: center; gap: 10px; text-align: left;
+  background: rgba(255,255,255,0.06); border: 1px solid var(--rarity-color); border-radius: 12px; padding: 9px 12px;
+  animation: slideDown .3s ease backwards;
+}
+.gacha-result-emoji { font-size: 26px; flex-shrink: 0; }
+.gacha-result-info { flex: 1; min-width: 0; }
+.gacha-result-name { font-size: 13.5px; font-weight: 700; }
+.gacha-result-meta { font-size: 10.5px; color: var(--rarity-color); margin-top: 1px; }
+.gacha-result-tag { font-size: 9.5px; font-weight: 800; padding: 2px 7px; border-radius: 999px; flex-shrink: 0; }
+.gacha-result-tag.is-new { background: var(--danger); color: #fff; }
+.gacha-result-tag.is-dupe { background: rgba(255,255,255,0.16); color: var(--text-dim); }
+.gacha-result-foot { font-size: 12px; color: var(--text-dim); }
+
+/* ---------- アイテム詳細 ---------- */
+.item-detail-card {
+  background: linear-gradient(160deg, #1f2154, #3b1e63);
+  border: 2px solid var(--rarity-color, var(--card-border)); border-radius: 22px; padding: 26px 22px; text-align: center;
+  max-width: 340px; width: 100%; max-height: 85vh; overflow-y: auto;
+  animation: levelupIn .4s cubic-bezier(.2,1.3,.4,1);
+}
+.item-detail-emoji { font-size: 56px; line-height: 1; }
+.item-detail-stars { font-size: 15px; color: var(--rarity-color); margin-top: 6px; letter-spacing: 2px; }
+.item-detail-name { font-size: 17px; font-weight: 800; margin-top: 4px; }
+.item-detail-cat { font-size: 11.5px; color: var(--text-mute); margin-top: 3px; }
+.item-detail-flavor { font-size: 13px; line-height: 1.8; color: var(--text-dim); margin-top: 14px; text-align: left; }
+.item-detail-effect {
+  margin-top: 12px; font-size: 12.5px; font-weight: 700; color: var(--accent-green);
+  background: rgba(52,211,153,0.14); border-radius: 10px; padding: 8px 12px;
+}
+.item-detail-series { margin-top: 10px; font-size: 11.5px; color: var(--accent-gold); }
+.item-detail-count { margin-top: 10px; font-size: 11px; color: var(--text-mute); }
+.item-detail-actions { display: flex; gap: 8px; margin-top: 16px; }
+.item-detail-actions .btn.is-active { border-color: var(--accent-gold); color: var(--accent-gold); }
+
+/* ---------- 装備(ステータス) ---------- */
+.equip-list { display: flex; flex-direction: column; gap: 8px; }
+.equip-row {
+  display: flex; align-items: center; gap: 10px; background: var(--card-bg);
+  border: 1px solid var(--card-border); border-radius: 12px; padding: 11px 14px; font-size: 13px;
+}
+.equip-label { color: var(--text-dim); flex-shrink: 0; }
+.equip-value { margin-left: auto; text-align: right; font-weight: 600; min-width: 0; }
+.equip-note { font-size: 11px; color: var(--text-mute); text-align: center; }
+
+/* ---------- ナビのバッジ ---------- */
+.nav-btn { position: relative; }
+.nav-badge {
+  position: absolute; top: 0; right: 50%; transform: translateX(16px);
+  background: var(--danger); color: #fff; font-size: 9px; font-weight: 800; font-style: normal;
+  min-width: 15px; padding: 1px 4px; border-radius: 999px; line-height: 1.4;
+}
