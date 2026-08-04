@@ -148,10 +148,48 @@
     });
   }
 
+  // 図鑑の収集数で解放される特別ステージ。次に解放されるものだけ予告として見せる。
+  function renderSpecialStages() {
+    const box = el("special-stages");
+    box.innerHTML = "";
+    const stages = Game.getSpecialStages(state);
+    const unlocked = stages.filter(s => s.unlocked);
+    const nextLocked = stages.find(s => !s.unlocked);
+    const show = nextLocked ? unlocked.concat([nextLocked]) : unlocked;
+    if (!show.length) return;
+
+    show.forEach(s => {
+      const card = make("button", "special-card" + (!s.unlocked ? " locked" : s.cleared ? " cleared" : ""));
+      card.appendChild(make("div", "special-emoji", s.unlocked ? s.emoji : "🔒"));
+      const body = make("div", "special-body");
+      const name = make("div", "special-name");
+      name.appendChild(make("span", null, s.name));
+      if (s.cleared) name.appendChild(make("span", "special-badge", "突破済"));
+      body.appendChild(name);
+      body.appendChild(make("div", "special-desc", s.desc));
+      if (s.unlocked) {
+        const best = s.best ? ` ・ 最高 ${s.best.correct}/${s.best.total}` : "";
+        body.appendChild(make("div", "special-req", `${s.questions}問 ・ 正答率${Math.round(s.clearRatio * 100)}%で突破${best}`));
+      } else {
+        body.appendChild(make("div", "special-req locked-req", `図鑑をあと${s.remaining}種集めると解放(${s.ownedItems}/${s.requireItems})`));
+      }
+      card.appendChild(body);
+      if (s.unlocked) card.appendChild(make("div", "special-go", "▶"));
+
+      if (s.unlocked) {
+        card.addEventListener("click", () => startBattle("special", null, null, s.id));
+      } else {
+        card.disabled = true;
+      }
+      box.appendChild(card);
+    });
+  }
+
   function renderMap() {
     const mapData = Game.getMapData(state);
     const current = findCurrentNode(mapData);
     if (!currentWorldTab) currentWorldTab = current.world;
+    renderSpecialStages();
     renderWorldTabs(mapData);
 
     const world = mapData.find(w => w.world === currentWorldTab);
@@ -215,15 +253,16 @@
   }
 
   // ---------------- 練習バトル ----------------
-  function startBattle(mode, world, topic) {
+  function startBattle(mode, world, topic, stageId) {
     let questions;
     if (mode === "topic") questions = Game.startTopicBattle(state, topic);
     else if (mode === "boss") questions = Game.startBossBattle(state, world);
+    else if (mode === "special") questions = Game.startSpecialBattle(state, stageId);
     else questions = Game.startReviewBattle(state);
 
     if (!questions.length) return;
 
-    battle = { mode, world, topic, questions, index: 0, results: [], answered: false, combo: 0, maxCombo: 0 };
+    battle = { mode, world, topic, stageId, questions, index: 0, results: [], answered: false, combo: 0, maxCombo: 0 };
     showScreen("battle");
     renderQuestion();
   }
@@ -231,6 +270,10 @@
   function battleLabel() {
     if (battle.mode === "boss") return `${WORLD_META[battle.world].label} ボス戦`;
     if (battle.mode === "review") return "復習ダンジョン";
+    if (battle.mode === "special") {
+      const stage = Game.getSpecialStage(battle.stageId);
+      return stage ? `${stage.emoji} ${stage.name}` : "特別ステージ";
+    }
     return TOPIC_LABELS[battle.topic];
   }
 
@@ -334,6 +377,7 @@
     let summary;
     if (battle.mode === "topic") summary = Game.finishTopicBattle(state, battle.topic, battle.results, battle.maxCombo);
     else if (battle.mode === "boss") summary = Game.finishBossBattle(state, battle.world, battle.results, battle.maxCombo);
+    else if (battle.mode === "special") summary = Game.finishSpecialBattle(state, battle.stageId, battle.results, battle.maxCombo);
     else summary = Game.finishReviewBattle(state, battle.results, battle.maxCombo);
 
     renderTopbar();
@@ -344,17 +388,26 @@
   }
 
   function renderResult(summary, mode) {
-    el("result-heading").textContent = mode === "boss" ? "👹 ボス戦の結果" : mode === "review" ? "📖 復習の結果" : "⚔️ バトル結果";
+    el("result-heading").textContent = mode === "boss" ? "👹 ボス戦の結果"
+      : mode === "review" ? "📖 復習の結果"
+      : mode === "special" ? `${summary.stage.emoji} ${summary.stage.name}の結果`
+      : "⚔️ バトル結果";
     el("result-score").textContent = `${summary.correctCount} / ${summary.total} 正解`;
     el("result-xp").textContent = `+${summary.xpGained} XP ・ 🪙 +${summary.coinsGained}`;
     el("result-combo").textContent = battle.maxCombo >= 2 ? `🔥 最大 ${battle.maxCombo} コンボ` : "";
 
     if (mode === "review") el("result-stars").textContent = summary.correctCount === summary.total ? "🎉" : "📚";
     else if (mode === "boss") el("result-stars").textContent = summary.cleared ? "🏆" : "💤";
+    else if (mode === "special") el("result-stars").textContent = summary.cleared ? summary.stage.emoji : "😵";
     else el("result-stars").textContent = summary.stars > 0 ? "⭐".repeat(summary.stars) : "😢";
 
     let msg = "";
-    if (mode === "boss") {
+    if (mode === "special") {
+      const need = Math.round(summary.stage.clearRatio * 100);
+      msg = summary.cleared
+        ? (summary.isFirstClear ? `${summary.stage.name}を初突破！特別な宝箱を獲得！` : `${summary.stage.name}を再突破。何度でも挑戦できます。`)
+        : `正答率${need}%以上で突破できます(今回は${Math.round(summary.ratio * 100)}%)。復習して再挑戦しよう。`;
+    } else if (mode === "boss") {
       msg = summary.cleared ? "ボスを撃破！次のワールドが解放された！" : "正答率70%以上でボスを撃破できます。復習してから再挑戦しよう。";
     } else if (mode === "topic") {
       msg = summary.cleared
@@ -980,7 +1033,7 @@
     el("btn-result-map").addEventListener("click", () => goto(battle && battle.mode === "review" ? "review" : "map"));
     el("btn-result-retry").addEventListener("click", () => {
       if (!battle) return goto("map");
-      startBattle(battle.mode, battle.world, battle.topic);
+      startBattle(battle.mode, battle.world, battle.topic, battle.stageId);
     });
 
     el("btn-exam-prev").addEventListener("click", () => moveExam(-1));

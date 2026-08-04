@@ -130,6 +130,29 @@ body {
 }
 
 /* ---------- マップ ---------- */
+/* ---------- 特別ステージ ---------- */
+.special-stages { display: flex; flex-direction: column; gap: 8px; }
+.special-card {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; cursor: pointer;
+  background: linear-gradient(135deg, rgba(167,139,250,0.2), rgba(250,204,21,0.1));
+  border: 1px solid rgba(167,139,250,0.55); border-radius: 16px; padding: 13px 15px;
+  color: var(--text-light); font-family: inherit;
+}
+.special-card:active { transform: scale(0.99); }
+.special-card.locked {
+  background: rgba(255,255,255,0.04); border-color: var(--card-border);
+  opacity: 0.6; cursor: default;
+}
+.special-card.cleared { border-color: var(--accent-green); background: linear-gradient(135deg, rgba(52,211,153,0.16), rgba(96,165,250,0.08)); }
+.special-emoji { font-size: 28px; flex-shrink: 0; }
+.special-body { flex: 1; min-width: 0; }
+.special-name { font-size: 14.5px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+.special-badge { font-size: 9.5px; font-weight: 800; padding: 1px 6px; border-radius: 999px; background: var(--accent-green); color: #052e20; }
+.special-desc { font-size: 11.5px; color: var(--text-dim); margin-top: 3px; line-height: 1.5; }
+.special-req { font-size: 11px; color: var(--accent-gold); margin-top: 4px; font-weight: 700; }
+.special-req.locked-req { color: var(--text-mute); }
+.special-go { margin-left: auto; color: var(--accent-gold); font-size: 18px; flex-shrink: 0; }
+
 .world-tabs { display: flex; gap: 8px; }
 .world-tab {
   flex: 1; padding: 9px 4px; text-align: center; border-radius: 12px; font-size: 12px; font-weight: 700;

@@ -1,7 +1,7 @@
 // ITパスポート冒険記 - 永続化(localStorage)
 const Storage = (() => {
   const KEY = "itpass-adventure-save-v1";
-  const SAVE_VERSION = 3;
+  const SAVE_VERSION = 4;
 
   function todayStr() {
     const d = new Date();
@@ -36,6 +36,10 @@ const Storage = (() => {
       avatarItemId: null,  // アバターに設定中のアイテムID
       openedChests: {},    // マップ上の宝箱マスの開封状況(chestKey -> true)
       streakChestDate: null, // 継続報酬の宝箱を受け取った日付
+
+      // --- 特別ステージ ---
+      clearedSpecials: {},  // stageId -> true
+      specialBest: {},      // stageId -> { correct, total }
 
       settings: { vibration: true },
       createdAt: todayStr(),

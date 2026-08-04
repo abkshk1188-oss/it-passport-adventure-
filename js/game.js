@@ -14,35 +14,60 @@ const Game = (() => {
   const EXAM_PASS_FIELD = 0.3;
 
   // --- コイン設計 ---
-  // 1バトル(6問)でおよそ28〜48コイン。ガチャ1回150コインなので、だいたい5回前後のバトルで1回引ける。
+  // 1バトル(6問)でおよそ33〜48コイン。ガチャ1回120コインなので、だいたい3〜4回のバトルで1回引ける。
   const COIN = {
     perCorrect: 3,
-    perCorrectReview: 2,
+    perCorrectReview: 3,
     perCorrectExam: 1,
-    topicClear: 10,
+    topicClear: 15,
     topicFirstClear: 30,
-    bossClear: 50,
+    bossClear: 60,
     bossFirstClear: 100,
     examPass: 200,
   };
 
   // --- ガチャ設計 ---
   const GACHA = {
-    singleCost: 150,
-    multiCost: 1350,   // 10連(1回分お得 + ★3以上が1つ確定)
+    singleCost: 120,
+    multiCost: 1080,   // 10連(1回分お得 + ★3以上が1つ確定)
     multiCount: 10,
     rates: { 1: 0.40, 2: 0.30, 3: 0.20, 4: 0.08, 5: 0.02 },
-    dupeRefund: { 1: 15, 2: 30, 3: 60, 4: 120, 5: 250 },
+    dupeRefund: { 1: 20, 2: 35, 3: 70, 4: 130, 5: 260 },
   };
   const RARITY_LABELS = { 1: "ふつう", 2: "めずらしい", 3: "レア", 4: "超レア", 5: "伝説" };
 
   // --- 宝箱設計 ---
   const CHESTS = {
-    battle: { label: "バトルの宝箱", emoji: "🎁", coins: [30, 70], itemChance: 0.25, minRarity: 1 },
-    map:    { label: "マップの宝箱", emoji: "💎", coins: [80, 150], itemChance: 0.50, minRarity: 2 },
-    streak: { label: "継続の宝箱", emoji: "🔥", coins: [50, 100], itemChance: 0.35, minRarity: 2 },
-    exam:   { label: "合格の宝箱", emoji: "🏆", coins: [200, 350], itemChance: 1.00, minRarity: 3 },
+    battle:  { label: "バトルの宝箱", emoji: "🎁", coins: [30, 70], itemChance: 0.25, minRarity: 1 },
+    map:     { label: "マップの宝箱", emoji: "💎", coins: [80, 150], itemChance: 0.50, minRarity: 2 },
+    streak:  { label: "継続の宝箱", emoji: "🔥", coins: [50, 100], itemChance: 0.35, minRarity: 2 },
+    exam:    { label: "合格の宝箱", emoji: "🏆", coins: [200, 350], itemChance: 1.00, minRarity: 3 },
+    special: { label: "書庫の宝箱", emoji: "🗝️", coins: [150, 300], itemChance: 0.85, minRarity: 3 },
   };
+
+  // --- 特別ステージ ---
+  // 図鑑の収集数で解放される、全分野ミックスの総復習ステージ。
+  // 苦手な問題が優先的に出るので、集めるほど弱点をまとめて潰せる作りにしている。
+  const SPECIAL_STAGES = [
+    {
+      id: "sp-library", name: "収集家の書庫", emoji: "📚", requireItems: 12,
+      questions: 8, clearRatio: 0.7,
+      desc: "3分野をまたいだ総復習。集めた知識の腕試し。",
+      xpPerCorrect: 14, coinPerCorrect: 5, firstClearCoins: 150, firstClearXp: 80,
+    },
+    {
+      id: "sp-corridor", name: "好古家の回廊", emoji: "🏛️", requireItems: 30,
+      questions: 10, clearRatio: 0.75,
+      desc: "取りこぼした問題が集まる回廊。正答率75%以上で突破。",
+      xpPerCorrect: 16, coinPerCorrect: 6, firstClearCoins: 250, firstClearXp: 120,
+    },
+    {
+      id: "sp-throne", name: "蒐集王の玉座", emoji: "👑", requireItems: 54,
+      questions: 12, clearRatio: 0.8,
+      desc: "最難関。正答率80%以上で蒐集王として認められる。",
+      xpPerCorrect: 20, coinPerCorrect: 8, firstClearCoins: 400, firstClearXp: 200,
+    },
+  ];
   const BATTLE_CHEST_CHANCE = 0.25;      // バトルクリア時の基本ドロップ率
   const BATTLE_CHEST_PERFECT_BONUS = 0.15; // 全問正解ならさらに上乗せ
 
@@ -262,6 +287,70 @@ const Game = (() => {
     const attempted = QUESTIONS.filter(q => (state.wrongCounts[q.id] || 0) > 0);
     const sorted = attempted.sort((a, b) => (state.wrongCounts[b.id] || 0) - (state.wrongCounts[a.id] || 0));
     return shuffle(sorted.slice(0, REVIEW_MAX)).map(withShuffledChoices);
+  }
+
+  // 特別ステージ。全分野をまたいで、苦手な問題を優先的に出す。
+  function getSpecialStages(state) {
+    const owned = allItems().filter(i => ownsItem(state, i.id)).length;
+    return SPECIAL_STAGES.map(s => ({
+      ...s,
+      ownedItems: owned,
+      unlocked: owned >= s.requireItems,
+      remaining: Math.max(0, s.requireItems - owned),
+      cleared: !!(state.clearedSpecials && state.clearedSpecials[s.id]),
+      best: (state.specialBest && state.specialBest[s.id]) || null,
+    }));
+  }
+
+  function getSpecialStage(stageId) {
+    return SPECIAL_STAGES.find(s => s.id === stageId) || null;
+  }
+
+  function startSpecialBattle(state, stageId) {
+    const stage = getSpecialStage(stageId);
+    if (!stage) return [];
+    const n = Math.min(stage.questions, QUESTIONS.length);
+    return shuffle(weightedSample(QUESTIONS, q => netWrongWeight(state, q), n)).map(withShuffledChoices);
+  }
+
+  function finishSpecialBattle(state, stageId, results, maxCombo) {
+    const stage = getSpecialStage(stageId);
+    recordAnswers(state, results);
+    updateMaxCombo(state, maxCombo || 0);
+
+    const correctCount = results.filter(r => r.correct).length;
+    const ratio = results.length ? correctCount / results.length : 0;
+    const cleared = ratio >= stage.clearRatio;
+    const wasCleared = !!(state.clearedSpecials && state.clearedSpecials[stageId]);
+
+    if (!state.clearedSpecials) state.clearedSpecials = {};
+    if (!state.specialBest) state.specialBest = {};
+    if (cleared) state.clearedSpecials[stageId] = true;
+    const prevBest = state.specialBest[stageId];
+    if (!prevBest || correctCount > prevBest.correct) {
+      state.specialBest[stageId] = { correct: correctCount, total: results.length };
+    }
+
+    let baseXp = correctCount * stage.xpPerCorrect;
+    let baseCoins = correctCount * stage.coinPerCorrect;
+    if (cleared && !wasCleared) {
+      baseXp += stage.firstClearXp;
+      baseCoins += stage.firstClearCoins;
+    }
+    if (ratio === 1) baseXp += 30;
+
+    const levelResult = addXp(state, baseXp);
+    const coinResult = addCoins(state, baseCoins);
+    // 突破したら必ず豪華な宝箱が出る
+    const chest = cleared ? openChest(state, "special") : null;
+
+    Storage.touchStreak(state);
+    Storage.save(state);
+    return {
+      correctCount, total: results.length, ratio, cleared,
+      isFirstClear: cleared && !wasCleared, stage, chest,
+      ...levelResult, ...coinResult,
+    };
   }
 
   // 模擬試験。本番の分野別出題数に近い比率でランダムに抽出する(苦手重み付けはしない)。
@@ -677,6 +766,8 @@ const Game = (() => {
     finishTopicBattle, finishBossBattle, finishReviewBattle, finishExam,
     weakTopicSummary, fieldAccuracy, wrongQuestions, overallProgress,
     worldKeys, xpNeeded, getExamModes,
+    // 特別ステージ
+    getSpecialStages, getSpecialStage, startSpecialBattle, finishSpecialBattle,
     // コイン/宝箱/ガチャ/図鑑
     openChest, claimStreakChest, hasStreakChestReady, gachaPull, canPull, getGachaInfo,
     collectionSummary, seriesProgress, itemsForCatalog, avatarCandidates, charmCandidates,
