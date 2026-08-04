@@ -34,7 +34,7 @@ const Game = (() => {
     rates: { 1: 0.40, 2: 0.30, 3: 0.20, 4: 0.08, 5: 0.02 },
     dupeRefund: { 1: 20, 2: 35, 3: 70, 4: 130, 5: 260 },
   };
-  const RARITY_LABELS = { 1: "ふつう", 2: "めずらしい", 3: "レア", 4: "超レア", 5: "伝説" };
+  const RARITY_LABELS = { 1: "ふつう", 2: "めずらしい", 3: "レア", 4: "超レア", 5: "伝説", 6: "蒐集王の証" };
 
   // --- 宝箱設計 ---
   const CHESTS = {
@@ -64,12 +64,49 @@ const Game = (() => {
     {
       id: "sp-throne", name: "蒐集王の玉座", emoji: "👑", requireItems: 54,
       questions: 12, clearRatio: 0.8,
-      desc: "最難関。正答率80%以上で蒐集王として認められる。",
+      desc: "難関。正答率80%以上で玉座にたどり着ける。",
       xpPerCorrect: 20, coinPerCorrect: 8, firstClearCoins: 400, firstClearXp: 200,
+    },
+    {
+      id: "sp-dream", name: "蒐集家の夢", emoji: "🌌", requireItems: 72,
+      questions: 20, clearRatio: 0.9,
+      desc: "図鑑を完成させた者だけが見る夢。全20問・正答率90%の最終試練。",
+      xpPerCorrect: 25, coinPerCorrect: 10, firstClearCoins: 800, firstClearXp: 400,
     },
   ];
   const BATTLE_CHEST_CHANCE = 0.25;      // バトルクリア時の基本ドロップ率
   const BATTLE_CHEST_PERFECT_BONUS = 0.15; // 全問正解ならさらに上乗せ
+
+  // --- 図鑑コンプリート報酬 ---
+  // ガチャからは絶対に出ない★6。72種すべて集めた時だけ手に入る。
+  const COLLECTIBLE_MAX_RARITY = 5;
+  const TROPHY_ITEM = {
+    id: "trophy-collector",
+    name: "金の認定証",
+    emoji: "🏅",
+    rarity: 6,
+    category: "コンプリート報酬",
+    flavor: "72種すべてを集めた者にだけ渡される認定証。ここに並んだ道具のどれ一つも、意味のない回り道ではなかったという証明。",
+    series: null,
+    seriesOrder: null,
+    effect: { type: "xp", value: 0.25, label: "獲得XP +25%" },
+    avatar: true,
+    gachaExcluded: true,
+  };
+  const TROPHY_TITLE = "蒐集王";
+
+  // 6つのシリーズをすべて完成させると読める、全体を締める物語。
+  const FINALE_STORY = {
+    id: "finale",
+    name: "終章 ― すべてはつながっている",
+    emoji: "🌅",
+    paragraphs: [
+      "手のひらに収まる円盤が、いつのまにか空の向こうへ消えた。つなぐたびに鳴っていた音も、静けさに変わった。道具の形はこんなにも変わったのに、変わらなかったものが一つある。動かしていたのは、いつも人の手だった。",
+      "誰かが深夜のログを読み、誰かが手帳の暗証を書き写し、誰かが「これでいいのか」と立ち止まった。計画し、動かし、確かめ、直す。その四つの足取りは、精霊の物語ではなく、あの長い夜そのものだった。",
+      "秘密を守る目隠しと、記録を違えないための重い足取りと、眠らずに灯りを守る目。三本の柱のあいだには、いつも隙間がある。影はそこから入る。だから柱は、立てたあとも見張り続けなければならない。",
+      "ここに並んだ72の道具は、便利になった歴史ではない。誰かが困り、誰かが工夫し、誰かが引き継いだ跡だ。あなたが覚えた用語のひとつひとつに、その跡がついている。次に困る誰かのために、この続きを書くのは、あなたの番だ。",
+    ],
+  };
 
   const AVATAR_TIERS = [
     { min: 1, max: 2, emoji: "🥚", title: "ITの卵" },
@@ -87,7 +124,12 @@ const Game = (() => {
 
   // ---------------- アイテム関連 ----------------
   function allItems() {
-    return typeof ITEMS !== "undefined" ? ITEMS : [];
+    const base = typeof ITEMS !== "undefined" ? ITEMS : [];
+    return base.concat([TROPHY_ITEM]);
+  }
+  // ガチャ・宝箱で入手できるアイテム(★1〜5)。コンプリート判定の母数もこれ。
+  function collectibleItems() {
+    return allItems().filter(i => i.rarity <= COLLECTIBLE_MAX_RARITY);
   }
   function allSeries() {
     return typeof ITEM_SERIES !== "undefined" ? ITEM_SERIES : [];
@@ -118,6 +160,8 @@ const Game = (() => {
     let emoji = tier.emoji;
     const avatarItem = state.avatarItemId ? getItem(state.avatarItemId) : null;
     if (avatarItem && ownsItem(state, avatarItem.id)) emoji = avatarItem.emoji;
+    // 図鑑を完成させた人は称号が「蒐集王」になる
+    const isCollector = ownsItem(state, TROPHY_ITEM.id);
     return {
       level: state.level,
       xp: state.xp,
@@ -126,7 +170,9 @@ const Game = (() => {
       emoji,
       tierEmoji: tier.emoji,
       avatarName: avatarItem && ownsItem(state, avatarItem.id) ? avatarItem.name : null,
-      title: tier.title,
+      title: isCollector ? TROPHY_TITLE : tier.title,
+      levelTitle: tier.title,
+      isCollector,
       streak: state.streak,
       maxCombo: state.maxCombo || 0,
       coins: state.coins || 0,
@@ -291,7 +337,7 @@ const Game = (() => {
 
   // 特別ステージ。全分野をまたいで、苦手な問題を優先的に出す。
   function getSpecialStages(state) {
-    const owned = allItems().filter(i => ownsItem(state, i.id)).length;
+    const owned = collectibleItems().filter(i => ownsItem(state, i.id)).length;
     return SPECIAL_STAGES.map(s => ({
       ...s,
       ownedItems: owned,
@@ -422,8 +468,9 @@ const Game = (() => {
     if (Math.random() < def.itemChance) {
       drop = grantItem(state, def.minRarity);
     }
+    const completion = checkCompletion(state);
     Storage.save(state);
-    return { kind, label: def.label, emoji: def.emoji, coins: coinsGained, drop };
+    return { kind, label: def.label, emoji: def.emoji, coins: coinsGained, drop, completion };
   }
 
   function battleChestChance(state, perfect) {
@@ -497,8 +544,9 @@ const Game = (() => {
       if (replaced) valid[valid.length - 1] = replaced;
     }
 
+    const completion = checkCompletion(state);
     Storage.save(state);
-    return { cost, results: valid };
+    return { cost, results: valid, completion };
   }
 
   function getGachaInfo() {
@@ -695,7 +743,8 @@ const Game = (() => {
 
   // 図鑑の集計。カテゴリ別・レアリティ別の入手状況を返す。
   function collectionSummary(state) {
-    const items = allItems();
+    // 母数は★1〜5のみ。★6の認定証はコンプリートのご褒美なので数に入れない。
+    const items = collectibleItems();
     const owned = items.filter(i => ownsItem(state, i.id));
     const byRarity = {};
     [1, 2, 3, 4, 5].forEach(r => {
@@ -708,7 +757,41 @@ const Game = (() => {
       percent: items.length ? Math.round((owned.length / items.length) * 100) : 0,
       byRarity,
       unseenCount: (state.unseenItems || []).length,
+      isComplete: items.length > 0 && owned.length === items.length,
+      hasTrophy: ownsItem(state, TROPHY_ITEM.id),
     };
+  }
+
+  // 図鑑を完成させた瞬間に★6の認定証を渡す。すでに持っていれば何もしない。
+  function checkCompletion(state) {
+    const items = collectibleItems();
+    if (!items.length) return null;
+    if (!items.every(i => ownsItem(state, i.id))) return null;
+    if (ownsItem(state, TROPHY_ITEM.id)) return null;
+    state.ownedItems[TROPHY_ITEM.id] = 1;
+    if (!state.unseenItems) state.unseenItems = [];
+    if (!state.unseenItems.includes(TROPHY_ITEM.id)) state.unseenItems.push(TROPHY_ITEM.id);
+    state.collectionCompletedAt = Storage.todayStr();
+    return { trophy: TROPHY_ITEM, title: TROPHY_TITLE };
+  }
+
+  // 6つのシリーズをすべて完成させたら終章が読める
+  function getFinale(state) {
+    const series = allSeries();
+    const done = series.length > 0 && series.every(s =>
+      s.itemIds.every(id => ownsItem(state, id))
+    );
+    return {
+      ...FINALE_STORY,
+      unlocked: done,
+      completedSeries: series.filter(s => s.itemIds.every(id => ownsItem(state, id))).length,
+      totalSeries: series.length,
+    };
+  }
+
+  function isGoldTheme(state) {
+    if (!state.settings || state.settings.goldTheme === false) return false;
+    return ownsItem(state, TROPHY_ITEM.id);
   }
 
   // シリーズごとの進捗と、解放済みの物語を返す
@@ -771,6 +854,7 @@ const Game = (() => {
     // コイン/宝箱/ガチャ/図鑑
     openChest, claimStreakChest, hasStreakChestReady, gachaPull, canPull, getGachaInfo,
     collectionSummary, seriesProgress, itemsForCatalog, avatarCandidates, charmCandidates,
+    checkCompletion, getFinale, isGoldTheme, collectibleItems,
     setAvatar, setCharm, markItemsSeen, getItem, ownsItem, rarityLabel, charmBonus,
     EXAM_PASS_OVERALL, EXAM_PASS_FIELD,
   };

@@ -575,6 +575,62 @@ body {
 .equip-value { margin-left: auto; text-align: right; font-weight: 600; min-width: 0; }
 .equip-note { font-size: 11px; color: var(--text-mute); text-align: center; }
 
+/* ---------- ★6と金色テーマ ---------- */
+.r6 { --rarity-color: #fde047; }
+.item-cell.r6.owned { box-shadow: 0 0 12px rgba(253,224,71,0.4); }
+
+body.gold-theme {
+  background: linear-gradient(160deg, #3b2f0b 0%, #1c1403 55%, #2e2205 100%);
+  background-attachment: fixed;
+}
+body.gold-theme .topbar,
+body.gold-theme .bottomnav { background: rgba(28, 20, 3, 0.9); }
+body.gold-theme .topbar-avatar {
+  border-radius: 50%; box-shadow: 0 0 0 2px var(--accent-gold), 0 0 10px rgba(250,204,21,0.5);
+  padding: 1px;
+}
+body.gold-theme .avatar-big {
+  border-radius: 50%; box-shadow: 0 0 0 3px var(--accent-gold), 0 0 18px rgba(250,204,21,0.45);
+  padding: 4px;
+}
+body.gold-theme .home-character-card,
+body.gold-theme .status-card { border-color: rgba(250,204,21,0.45); }
+
+/* ---------- 図鑑コンプリート演出 ---------- */
+.complete-card {
+  background: linear-gradient(160deg, #78350f, #b45309 55%, #78350f);
+  border: 3px solid var(--accent-gold); border-radius: 24px; padding: 30px 26px; text-align: center;
+  box-shadow: 0 0 50px rgba(250,204,21,0.45); animation: levelupIn .55s cubic-bezier(.2,1.3,.4,1);
+  max-width: 340px; width: 100%; max-height: 88vh; overflow-y: auto;
+}
+.complete-crown { font-size: 52px; animation: sparkle 1.4s ease-in-out infinite; }
+.complete-title { font-size: 21px; font-weight: 900; color: #fef08a; margin-top: 6px; letter-spacing: 1px; }
+.complete-sub { font-size: 12px; color: #fde68a; margin-top: 2px; }
+.complete-trophy {
+  margin-top: 18px; padding: 14px; border-radius: 16px;
+  background: rgba(0,0,0,0.25); border: 1px solid var(--accent-gold);
+}
+.complete-trophy-emoji { font-size: 44px; }
+.complete-trophy-name { font-size: 16px; font-weight: 800; color: #fef08a; margin-top: 4px; }
+.complete-trophy-meta { font-size: 11px; color: #fde68a; margin-top: 2px; }
+.complete-rewards { margin-top: 16px; display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; color: #fef3c7; }
+.complete-rewards div::before { content: "✓ "; color: var(--accent-green); font-weight: 800; }
+
+/* ---------- 終章 ---------- */
+.finale-card {
+  background: linear-gradient(160deg, rgba(250,204,21,0.14), rgba(167,139,250,0.12));
+  border: 2px solid var(--accent-gold); border-radius: 18px; padding: 18px;
+}
+.finale-card.locked { background: var(--card-bg); border: 1px dashed var(--card-border); }
+.finale-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.finale-emoji { font-size: 26px; }
+.finale-name { font-size: 15px; font-weight: 800; color: var(--accent-gold); }
+.finale-card.locked .finale-name { color: var(--text-dim); }
+.finale-progress { margin-left: auto; font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.finale-body { display: flex; flex-direction: column; gap: 12px; }
+.finale-para { font-size: 13px; line-height: 1.95; color: #fef3c7; }
+.finale-locked-note { font-size: 12px; color: var(--text-mute); line-height: 1.7; }
+
 /* ---------- ナビのバッジ ---------- */
 .nav-btn { position: relative; }
 .nav-badge {

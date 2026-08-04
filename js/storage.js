@@ -40,8 +40,9 @@ const Storage = (() => {
       // --- 特別ステージ ---
       clearedSpecials: {},  // stageId -> true
       specialBest: {},      // stageId -> { correct, total }
+      collectionCompletedAt: null, // 図鑑を完成させた日付
 
-      settings: { vibration: true },
+      settings: { vibration: true, goldTheme: true },
       createdAt: todayStr(),
     };
   }

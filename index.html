@@ -272,6 +272,10 @@
       <span>正誤時にスマホを振動させる</span>
       <input type="checkbox" id="setting-vibration">
     </label>
+    <label class="setting-row hidden" id="setting-gold-row">
+      <span>金色テーマ(蒐集王の証)</span>
+      <input type="checkbox" id="setting-gold">
+    </label>
   </section>
 
 </main>
@@ -320,6 +324,26 @@
     <div id="gacha-result-list" class="gacha-result-list"></div>
     <div class="gacha-result-foot" id="gacha-result-foot"></div>
     <button class="btn btn-secondary" id="btn-gacha-close">閉じる</button>
+  </div>
+</div>
+
+<!-- 図鑑コンプリート演出 -->
+<div id="complete-overlay" class="overlay hidden">
+  <div class="complete-card">
+    <div class="complete-crown">👑</div>
+    <div class="complete-title">図鑑コンプリート！</div>
+    <div class="complete-sub">72種すべてを集めました</div>
+    <div class="complete-trophy">
+      <div class="complete-trophy-emoji">🏅</div>
+      <div class="complete-trophy-name">金の認定証</div>
+      <div class="complete-trophy-meta">★6 蒐集王の証 ・ 獲得XP +25%</div>
+    </div>
+    <div class="complete-rewards">
+      <div>称号「蒐集王」を獲得</div>
+      <div>特別ステージ「🌌 蒐集家の夢」が解放</div>
+      <div>金色テーマが使えるようになりました</div>
+    </div>
+    <div class="levelup-hint">タップして続ける</div>
   </div>
 </div>
 

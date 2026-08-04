@@ -13,6 +13,7 @@
   let rarityFilter = 0;    // 図鑑のレアリティ絞り込み(0 = すべて)
   let collectionTab = "catalog";
   let detailItemId = null;
+  let pendingCompletion = null; // ガチャ結果を閉じたあとに出すコンプリート演出
 
   // 画面名 -> 下部ナビでハイライトするタブ
   const NAV_PARENT = {
@@ -73,6 +74,12 @@
     el("topbar-streak").textContent = c.streak;
     el("topbar-coins").textContent = c.coins;
     renderNavBadge();
+    applyTheme();
+  }
+
+  // 図鑑を完成させた人だけ金色テーマになる(設定でオフにできる)
+  function applyTheme() {
+    document.body.classList.toggle("gold-theme", Game.isGoldTheme(state));
   }
 
   // 図鑑タブに未確認アイテムの件数を出す
@@ -87,6 +94,13 @@
   function enqueueOverlay(fn) {
     overlayQueue.push(fn);
     if (overlayQueue.length === 1) fn();
+  }
+
+  // 宝箱を見せ、その中身で図鑑が完成したならコンプリート演出も続けて出す
+  function enqueueChest(chest) {
+    if (!chest) return;
+    enqueueOverlay(() => showChest(chest));
+    if (chest.completion) enqueueOverlay(showCompletion);
   }
 
   function dismissOverlay(overlayId) {
@@ -237,7 +251,7 @@
             vibrate([0, 40, 40, 60]);
             renderTopbar();
             renderMap();
-            enqueueOverlay(() => showChest(chest));
+            enqueueChest(chest);
           }
         } else if (node.type === "boss") {
           startBattle("boss", world.world, null);
@@ -384,7 +398,7 @@
     renderResult(summary, battle.mode);
     showScreen("result");
     if (summary.leveledUp) enqueueOverlay(showLevelUp);
-    if (summary.chest) enqueueOverlay(() => showChest(summary.chest));
+    enqueueChest(summary.chest);
   }
 
   function renderResult(summary, mode) {
@@ -572,7 +586,7 @@
     renderExamResult(summary);
     showScreen("exam-result");
     if (summary.leveledUp) enqueueOverlay(showLevelUp);
-    if (summary.chest) enqueueOverlay(() => showChest(summary.chest));
+    enqueueChest(summary.chest);
   }
 
   function renderExamResult(summary) {
@@ -723,9 +737,18 @@
     const pull = Game.gachaPull(state, multi);
     if (!pull) return;
     vibrate([0, 30, 40, 60]);
+    // コンプリートした場合はガチャ結果を閉じたあとに演出を出す
+    pendingCompletion = pull.completion || null;
     renderTopbar();
     renderCollection();
     showGachaResult(pull);
+  }
+
+  // ---------------- 図鑑コンプリート演出 ----------------
+  function showCompletion() {
+    el("complete-overlay").classList.remove("hidden");
+    vibrate([0, 80, 60, 80, 60, 120]);
+    renderTopbar();
   }
 
   function showGachaResult(pull) {
@@ -876,6 +899,24 @@
       card.appendChild(story);
       box.appendChild(card);
     });
+
+    // 6シリーズすべて完成で読める終章
+    const finale = Game.getFinale(state);
+    const fcard = make("div", "finale-card" + (finale.unlocked ? "" : " locked"));
+    const fhead = make("div", "finale-head");
+    fhead.appendChild(make("div", "finale-emoji", finale.unlocked ? finale.emoji : "🔒"));
+    fhead.appendChild(make("div", "finale-name", finale.unlocked ? finale.name : "終章"));
+    fhead.appendChild(make("div", "finale-progress", `${finale.completedSeries}/${finale.totalSeries}`));
+    fcard.appendChild(fhead);
+    const fbody = make("div", "finale-body");
+    if (finale.unlocked) {
+      finale.paragraphs.forEach(p => fbody.appendChild(make("div", "finale-para", p)));
+    } else {
+      fbody.appendChild(make("div", "finale-locked-note",
+        `6つのストーリーをすべて完成させると、それらをつなぐ終章が読めます。(残り${finale.totalSeries - finale.completedSeries}シリーズ)`));
+    }
+    fcard.appendChild(fbody);
+    box.appendChild(fcard);
   }
 
   function setCollectionTab(tab) {
@@ -956,8 +997,10 @@
   function renderStatus() {
     const c = Game.getCharacterInfo(state);
     el("status-emoji").textContent = c.emoji;
-    el("status-title").textContent = c.title;
-    el("status-level").textContent = `Lv.${c.level}`;
+    el("status-title").textContent = c.isCollector ? `👑 ${c.title}` : c.title;
+    el("status-level").textContent = c.isCollector ? `Lv.${c.level}(${c.levelTitle})` : `Lv.${c.level}`;
+    el("setting-gold-row").classList.toggle("hidden", !c.isCollector);
+    el("setting-gold").checked = !(state.settings && state.settings.goldTheme === false);
     el("status-xp-fill").style.width = `${c.xpPercent}%`;
     el("status-xp-text").textContent = `${c.xp} / ${c.xpNeeded} XP`;
     el("status-accuracy").textContent = `${c.accuracy}%`;
@@ -1063,7 +1106,7 @@
       if (!chest) return;
       renderTopbar();
       renderHome();
-      enqueueOverlay(() => showChest(chest));
+      enqueueChest(chest);
     });
 
     el("btn-gacha-single").addEventListener("click", () => doGacha(false));
@@ -1071,6 +1114,19 @@
     el("btn-gacha-close").addEventListener("click", () => {
       el("gacha-overlay").classList.add("hidden");
       renderCollection();
+      if (pendingCompletion) {
+        pendingCompletion = null;
+        enqueueOverlay(showCompletion);
+      }
+    });
+    el("complete-overlay").addEventListener("click", () => {
+      dismissOverlay("complete-overlay");
+      renderCollection();
+    });
+    el("setting-gold").addEventListener("change", e => {
+      state.settings.goldTheme = e.target.checked;
+      Storage.save(state);
+      applyTheme();
     });
     document.querySelectorAll(".collection-tab").forEach(btn => {
       btn.addEventListener("click", () => setCollectionTab(btn.dataset.ctab));
@@ -1112,8 +1168,11 @@
     });
 
     Storage.touchStreak(state);
+    // 起動時にもコンプリート判定をしておく(保存データを引き継いだ場合の取りこぼし防止)
+    const completionOnBoot = Game.checkCompletion(state);
     Storage.save(state);
     goto("home");
+    if (completionOnBoot) enqueueOverlay(showCompletion);
 
     if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
       navigator.serviceWorker.register("sw.js").catch(() => {});
