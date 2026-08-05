@@ -42,7 +42,7 @@ const Storage = (() => {
       specialBest: {},      // stageId -> { correct, total }
       collectionCompletedAt: null, // 図鑑を完成させた日付
 
-      settings: { vibration: true, goldTheme: true },
+      settings: { vibration: true, goldTheme: true, bgm: true, se: true },
       createdAt: todayStr(),
     };
   }

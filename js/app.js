@@ -32,6 +32,42 @@
     return node;
   }
 
+  // 表計算の表・擬似言語コードを描画する。どちらも無い問題では領域を隠す。
+  // container は要素ID(document内に存在する固定要素向け)、または未接続でもよいDOM要素そのもの。
+  function renderFigure(container, q) {
+    const box = typeof container === "string" ? el(container) : container;
+    box.innerHTML = "";
+    const hasTable = q.table && q.table.rows && q.table.rows.length;
+    const hasCode = !!q.code;
+    box.classList.toggle("hidden", !hasTable && !hasCode);
+    if (!hasTable && !hasCode) return;
+
+    if (hasTable) {
+      const wrap = make("div", "figure-scroll");
+      const table = make("table", "ss-table");
+      if (q.table.headers && q.table.headers.length) {
+        const thead = document.createElement("thead");
+        const tr = document.createElement("tr");
+        q.table.headers.forEach(h => tr.appendChild(make("th", null, h)));
+        thead.appendChild(tr);
+        table.appendChild(thead);
+      }
+      const tbody = document.createElement("tbody");
+      q.table.rows.forEach(row => {
+        const tr = document.createElement("tr");
+        row.forEach(cell => tr.appendChild(make("td", null, cell)));
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      wrap.appendChild(table);
+      box.appendChild(wrap);
+    }
+
+    if (hasCode) {
+      box.appendChild(make("pre", "code-block", q.code));
+    }
+  }
+
   function vibrate(pattern) {
     if (!state.settings || !state.settings.vibration) return;
     if (navigator.vibrate) {
@@ -63,6 +99,14 @@
       b.classList.toggle("active", b.dataset.nav === parent);
     });
     window.scrollTo(0, 0);
+    updateBgmForScreen(name);
+  }
+
+  // 画面に応じてBGMを切り替える。ボス戦だけ専用の緊迫した曲にする。
+  function updateBgmForScreen(name) {
+    if (name === "battle" && battle && battle.mode === "boss") Sound.startBgm("boss");
+    else if (name === "battle" || name === "exam-battle") Sound.startBgm("battle");
+    else Sound.startBgm("map");
   }
 
   function renderTopbar() {
@@ -297,6 +341,7 @@
     el("battle-topic").textContent = battleLabel();
     el("battle-bar-fill").style.width = `${(battle.index / battle.questions.length) * 100}%`;
     el("battle-question").textContent = q.q;
+    renderFigure("battle-figure", q);
 
     const choicesEl = el("battle-choices");
     choicesEl.innerHTML = "";
@@ -305,7 +350,7 @@
       const btn = make("button", "choice-btn");
       btn.appendChild(make("span", "choice-mark", MARKS[i]));
       btn.appendChild(make("span", null, choice));
-      btn.addEventListener("click", () => handleChoice(i));
+      btn.addEventListener("click", () => { Sound.play("select"); handleChoice(i); });
       item.appendChild(btn);
       choicesEl.appendChild(item);
     });
@@ -343,9 +388,12 @@
       battle.combo += 1;
       if (battle.combo > battle.maxCombo) battle.maxCombo = battle.combo;
       vibrate(35);
+      if (battle.combo >= 2) Sound.play("combo", battle.combo);
+      else Sound.play("correct");
     } else {
       battle.combo = 0;
       vibrate([50, 45, 50]);
+      Sound.play("incorrect");
     }
 
     // 各選択肢に正誤マークとインライン解説を付ける
@@ -514,6 +562,7 @@
     el("exam-bar-fill").style.width = `${((exam.index + 1) / total) * 100}%`;
     el("exam-field-label").textContent = WORLD_META[q.field].label;
     el("exam-question").textContent = q.q;
+    renderFigure("exam-figure", q);
 
     const choicesEl = el("exam-choices");
     choicesEl.innerHTML = "";
@@ -684,6 +733,11 @@
     item.appendChild(head);
 
     const body = make("div", "wrong-item-body hidden");
+    if (q.table || q.code) {
+      const fig = make("div", "battle-figure");
+      renderFigure(fig, q); // まだdocumentに接続前の要素なのでIDではなく要素自体を渡す
+      body.appendChild(fig);
+    }
     q.choices.forEach((choice, i) => {
       let cls = "wrong-choice";
       if (i === q.answer) cls += " is-answer";
@@ -710,6 +764,7 @@
 
   // ---------------- 宝箱 ----------------
   function showChest(chest) {
+    Sound.play("chest");
     el("chest-emoji").textContent = chest.emoji;
     el("chest-label").textContent = chest.label;
     el("chest-coins").textContent = `🪙 +${chest.coins}`;
@@ -732,16 +787,75 @@
   }
 
   // ---------------- ガチャ ----------------
+  let gachaAnimTimers = [];
+  function clearGachaAnimTimers() {
+    gachaAnimTimers.forEach(t => clearTimeout(t));
+    gachaAnimTimers = [];
+  }
+
   function doGacha(multi) {
     if (!Game.canPull(state, multi)) return;
     const pull = Game.gachaPull(state, multi);
     if (!pull) return;
-    vibrate([0, 30, 40, 60]);
     // コンプリートした場合はガチャ結果を閉じたあとに演出を出す
     pendingCompletion = pull.completion || null;
     renderTopbar();
     renderCollection();
-    showGachaResult(pull);
+    playGachaAnimation(pull);
+  }
+
+  // 抽選演出。レアリティが高いほど「ため」を長くし、専用の予兆演出を挟む。
+  function playGachaAnimation(pull) {
+    clearGachaAnimTimers();
+    const best = pull.results.reduce((m, r) => Math.max(m, r.item.rarity), 0);
+    const overlay = el("gacha-anim-overlay");
+    const orb = el("gacha-orb");
+    const aura = el("gacha-aura");
+    const omen = el("gacha-omen");
+
+    orb.className = "";
+    orb.textContent = "🔮";
+    aura.className = "gacha-aura";
+    omen.classList.add("hidden");
+    omen.textContent = "";
+    overlay.classList.remove("hidden");
+
+    Sound.play("gachaCharge");
+    vibrate(best >= 5 ? [0, 40, 80, 40, 80, 40] : [0, 40, 80, 40]);
+
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      clearGachaAnimTimers();
+      overlay.classList.add("hidden");
+      Sound.play("reveal", best);
+      vibrate(best >= 5 ? [0, 60, 40, 60, 40, 120] : [0, 60, 60, 90]);
+      showGachaResult(pull);
+    };
+
+    // タップでスキップできるようにする
+    overlay.onclick = finish;
+
+    // レアリティが高いほど溜め時間が長い(★5:2.2秒 / ★4:1.5秒 / それ以下:0.9秒)
+    const chargeMs = best >= 5 ? 2200 : best >= 4 ? 1500 : 900;
+
+    if (best >= 4) {
+      gachaAnimTimers.push(setTimeout(() => {
+        if (finished) return;
+        aura.classList.add(`r${best}`);
+        omen.textContent = best >= 6 ? "とてつもない何かの気配…！" : best >= 5 ? "伝説の気配…！" : "光が強くなっていく…";
+        omen.classList.remove("hidden");
+        Sound.play("gachaOmen");
+        vibrate([0, 30, 30, 30]);
+      }, Math.max(0, chargeMs - 700)));
+    }
+
+    gachaAnimTimers.push(setTimeout(() => {
+      if (finished) return;
+      orb.classList.add("bursting");
+      gachaAnimTimers.push(setTimeout(finish, 260));
+    }, chargeMs));
   }
 
   // ---------------- 図鑑コンプリート演出 ----------------
@@ -1008,6 +1122,8 @@
     el("status-streak").textContent = c.streak;
     el("status-combo").textContent = c.maxCombo;
     el("setting-vibration").checked = !!(state.settings && state.settings.vibration);
+    el("setting-bgm").checked = !!(state.settings && state.settings.bgm);
+    el("setting-se").checked = !!(state.settings && state.settings.se);
 
     const avatarItem = state.avatarItemId ? Game.getItem(state.avatarItemId) : null;
     el("equip-avatar").textContent = avatarItem && Game.ownsItem(state, avatarItem.id)
@@ -1047,6 +1163,7 @@
 
   // ---------------- レベルアップ演出 ----------------
   function showLevelUp() {
+    Sound.play("levelup");
     const c = Game.getCharacterInfo(state);
     el("levelup-emoji").textContent = c.emoji;
     el("levelup-level").textContent = c.level;
@@ -1095,6 +1212,18 @@
       state.settings.vibration = e.target.checked;
       Storage.save(state);
       if (e.target.checked) vibrate(30);
+    });
+    el("setting-bgm").addEventListener("change", e => {
+      state.settings.bgm = e.target.checked;
+      Storage.save(state);
+      Sound.setSettings(state.settings);
+      updateBgmForScreen(document.querySelector(".screen.active").id.replace("screen-", ""));
+    });
+    el("setting-se").addEventListener("change", e => {
+      state.settings.se = e.target.checked;
+      Storage.save(state);
+      Sound.setSettings(state.settings);
+      if (e.target.checked) Sound.play("select");
     });
 
     el("levelup-overlay").addEventListener("click", () => dismissOverlay("levelup-overlay"));
@@ -1166,6 +1295,17 @@
         goto("home");
       }
     });
+
+    // ブラウザの自動再生制限を回避するため、最初のタップでAudioContextを起動する
+    Sound.setSettings(state.settings);
+    el("setting-bgm").checked = !!(state.settings && state.settings.bgm);
+    el("setting-se").checked = !!(state.settings && state.settings.se);
+    const unlockOnce = () => {
+      Sound.unlock();
+      updateBgmForScreen(document.querySelector(".screen.active").id.replace("screen-", ""));
+      document.removeEventListener("pointerdown", unlockOnce);
+    };
+    document.addEventListener("pointerdown", unlockOnce);
 
     Storage.touchStreak(state);
     // 起動時にもコンプリート判定をしておく(保存データを引き継いだ場合の取りこぼし防止)

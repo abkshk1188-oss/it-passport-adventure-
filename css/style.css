@@ -210,6 +210,25 @@ body {
 .battle-question { font-size: 16.5px; line-height: 1.6; font-weight: 600; }
 .battle-choices { display: flex; flex-direction: column; gap: 10px; }
 
+/* ---------- 表計算の表・擬似言語コード ---------- */
+.battle-figure { display: flex; flex-direction: column; gap: 12px; }
+.figure-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.ss-table { border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; min-width: 100%; }
+.ss-table th, .ss-table td {
+  border: 1px solid rgba(255,255,255,0.22); padding: 5px 9px; text-align: center; white-space: nowrap;
+}
+.ss-table th { background: rgba(255,255,255,0.12); color: var(--text-dim); font-weight: 700; }
+.ss-table td:first-child {
+  background: rgba(255,255,255,0.12); color: var(--text-dim); font-weight: 700;
+}
+.ss-table td { background: rgba(255,255,255,0.03); }
+.code-block {
+  margin: 0; padding: 12px 14px; border-radius: 12px; font-size: 12.5px; line-height: 1.7;
+  background: rgba(0,0,0,0.35); border: 1px solid var(--card-border); color: #d1fae5;
+  font-family: "Consolas", "Courier New", "Osaka-Mono", monospace;
+  white-space: pre; overflow-x: auto; -webkit-overflow-scrolling: touch; tab-size: 2;
+}
+
 .choice-item { display: flex; flex-direction: column; }
 .choice-btn {
   text-align: left; padding: 13px 14px; border-radius: 12px; border: 1px solid var(--card-border);
@@ -519,6 +538,30 @@ body {
 .chest-item-name { font-size: 14px; font-weight: 700; }
 .chest-item-tag { font-size: 10px; font-weight: 800; color: #fff; background: var(--danger); padding: 1px 8px; border-radius: 999px; }
 .chest-item-tag.dupe { background: rgba(255,255,255,0.2); }
+
+/* ---------- ガチャの抽選演出 ---------- */
+.gacha-stage { position: relative; display: flex; flex-direction: column; align-items: center; gap: 18px; }
+.gacha-aura {
+  position: absolute; width: 220px; height: 220px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(167,139,250,0.5), transparent 70%);
+  animation: auraPulse 1.1s ease-in-out infinite;
+}
+.gacha-aura.r4 { background: radial-gradient(circle, rgba(192,132,252,0.6), transparent 70%); }
+.gacha-aura.r5 { background: radial-gradient(circle, rgba(251,191,36,0.65), transparent 70%); width: 260px; height: 260px; }
+.gacha-aura.r6 {
+  background: radial-gradient(circle, rgba(253,224,71,0.8), rgba(250,204,21,0.3) 60%, transparent 75%);
+  width: 300px; height: 300px; animation: auraPulse .7s ease-in-out infinite;
+}
+@keyframes auraPulse { 0%,100% { transform: scale(0.9); opacity: 0.6; } 50% { transform: scale(1.15); opacity: 1; } }
+.gacha-orb {
+  font-size: 64px; position: relative; z-index: 1; animation: orbSpin 1.2s linear infinite, orbBob 1.2s ease-in-out infinite;
+}
+@keyframes orbSpin { from { filter: hue-rotate(0deg);} to { filter: hue-rotate(360deg);} }
+@keyframes orbBob { 0%,100% { transform: translateY(0) scale(1);} 50% { transform: translateY(-10px) scale(1.08);} }
+.gacha-orb.bursting { animation: orbBurst .5s ease-out forwards; }
+@keyframes orbBurst { 0% { transform: scale(1);} 60% { transform: scale(1.6);} 100% { transform: scale(2.2); opacity: 0;} }
+.gacha-omen { position: relative; z-index: 1; font-size: 15px; font-weight: 800; color: #fde68a; letter-spacing: 1px; animation: fadeIn .3s ease; }
+.gacha-skip { position: absolute; bottom: -40px; font-size: 11px; color: var(--text-mute); }
 
 /* ---------- ガチャ結果 ---------- */
 .gacha-result-card {
