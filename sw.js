@@ -1,6 +1,6 @@
 // アプリを更新したら必ずこの数字を上げること。
 // キャッシュ名が変わることで install 時に全アセットを取得し直し、古いキャッシュを破棄する。
-const CACHE_VERSION = "v8";
+const CACHE_VERSION = "v9";
 const CACHE_NAME = `itpass-adventure-${CACHE_VERSION}`;
 
 const ASSETS = [
@@ -46,8 +46,11 @@ self.addEventListener("fetch", event => {
   const url = new URL(event.request.url);
 
   if (isAppShell(url)) {
+    // ブラウザの標準HTTPキャッシュ(GitHub Pages/CDN側のCache-Controlによる古い応答保持)を
+    // 完全にバイパスするため、リクエストを cache:"reload" で作り直してからfetchする。
+    const freshRequest = new Request(event.request.url, { cache: "reload" });
     event.respondWith(
-      fetch(event.request)
+      fetch(freshRequest)
         .then(response => {
           if (response && response.status === 200) {
             const clone = response.clone();
