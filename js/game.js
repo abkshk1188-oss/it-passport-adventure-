@@ -28,8 +28,8 @@ const Game = (() => {
 
   // --- ガチャ設計 ---
   const GACHA = {
-    singleCost: 120,
-    multiCost: 1080,   // 10連(1回分お得 + ★3以上が1つ確定)
+    singleCost: 100,
+    multiCost: 1000,   // 10連(★3以上が1枠確定)
     multiCount: 10,
     rates: { 1: 0.40, 2: 0.30, 3: 0.20, 4: 0.08, 5: 0.02 },
     dupeRefund: { 1: 20, 2: 35, 3: 70, 4: 130, 5: 260 },
@@ -233,10 +233,11 @@ const Game = (() => {
   // 宝箱は進行の妨げにならないよう、次のトピックの解放条件には影響させない。
   function getMapData(state) {
     const worlds = worldKeys();
-    let prevWorldBossCleared = true; // 最初のワールドは常に解放
+    // 3ワールドとも最初から自由に選べる(ワールド間の解放条件はなし)。
+    // ワールド内のノードは引き続き順番にクリアが必要。
     return worlds.map(worldKey => {
       const topics = TOPIC_ORDER[worldKey];
-      let prevTopicCleared = prevWorldBossCleared;
+      let prevTopicCleared = true;
       const nodes = [];
 
       topics.forEach((topicKey, idx) => {
@@ -280,13 +281,11 @@ const Game = (() => {
         stars: bossCleared ? 3 : 0,
       });
 
-      const worldUnlocked = prevWorldBossCleared;
-      prevWorldBossCleared = bossCleared;
       return {
         world: worldKey,
         label: WORLD_META[worldKey].label,
         color: WORLD_META[worldKey].color,
-        unlocked: worldUnlocked,
+        unlocked: true,
         bossCleared,
         clearedCount: nodes.filter(n => n.type === "topic" && n.cleared).length,
         topicCount: nodes.filter(n => n.type === "topic").length,

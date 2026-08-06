@@ -787,11 +787,21 @@
   }
 
   // ---------------- ガチャ ----------------
-  let gachaAnimTimers = [];
-  function clearGachaAnimTimers() {
-    gachaAnimTimers.forEach(t => clearTimeout(t));
-    gachaAnimTimers = [];
+  // レアリティごとの必要タップ回数。★1・★2は1回、レアは2回、超レアは3回、伝説は4回。
+  function stagesForRarity(rarity) {
+    if (rarity <= 2) return 1;
+    if (rarity === 3) return 2;
+    if (rarity === 4) return 3;
+    return 4; // 5以上(伝説・蒐集王の証)
   }
+  const GACHA_STAGE_PROMPTS = {
+    1: ["🔮 タップして結果を見る"],
+    2: ["🔮 タップして占う", "✨ 何かが見えてきた…もう一度タップ"],
+    3: ["🔮 タップして占う", "✨ 気配が強まる…タップで続ける", "🌟 光が集まっていく…タップで見る"],
+    4: ["🔮 タップして占う", "✨ 気配が強まる…タップで続ける", "🌟 光が渦を巻く…タップで進む", "💫 何かが降りてくる…タップで見る"],
+  };
+  const GACHA_STAGE_ORBS = ["🔮", "✨", "🌟", "💫"];
+  const GACHA_STAGE_OMENS = ["", "気配が強まっていく…", "光が渦を巻いていく…", "何かが降りてくる…"];
 
   function doGacha(multi) {
     if (!Game.canPull(state, multi)) return;
@@ -804,58 +814,71 @@
     playGachaAnimation(pull);
   }
 
-  // 抽選演出。レアリティが高いほど「ため」を長くし、専用の予兆演出を挟む。
+  // 抽選演出。タイマーでは自動進行させず、レアリティに応じた回数だけタップさせて開示する。
+  // レアリティが高いほどタップ回数が多く、タップごとに演出(オーラ・玉・音)が強くなる。
   function playGachaAnimation(pull) {
-    clearGachaAnimTimers();
     const best = pull.results.reduce((m, r) => Math.max(m, r.item.rarity), 0);
+    const totalStages = stagesForRarity(best);
     const overlay = el("gacha-anim-overlay");
     const orb = el("gacha-orb");
     const aura = el("gacha-aura");
     const omen = el("gacha-omen");
+    const prompt = el("gacha-prompt");
+
+    let stage = 0;    // これまでのタップ回数
+    let locked = false; // 1タップで二重に進行しないための短い連打防止
 
     orb.className = "";
-    orb.textContent = "🔮";
+    orb.textContent = GACHA_STAGE_ORBS[0];
     aura.className = "gacha-aura";
+    aura.style.width = "";
+    aura.style.height = "";
+    aura.style.filter = "";
     omen.classList.add("hidden");
     omen.textContent = "";
+    prompt.textContent = GACHA_STAGE_PROMPTS[totalStages][0];
     overlay.classList.remove("hidden");
+    vibrate(20);
 
-    Sound.play("gachaCharge");
-    vibrate(best >= 5 ? [0, 40, 80, 40, 80, 40] : [0, 40, 80, 40]);
-
-    let finished = false;
-    const finish = () => {
-      if (finished) return;
-      finished = true;
-      clearGachaAnimTimers();
-      overlay.classList.add("hidden");
-      Sound.play("reveal", best);
-      vibrate(best >= 5 ? [0, 60, 40, 60, 40, 120] : [0, 60, 60, 90]);
-      showGachaResult(pull);
-    };
-
-    // タップでスキップできるようにする
-    overlay.onclick = finish;
-
-    // レアリティが高いほど溜め時間が長い(★5:2.2秒 / ★4:1.5秒 / それ以下:0.9秒)
-    const chargeMs = best >= 5 ? 2200 : best >= 4 ? 1500 : 900;
-
-    if (best >= 4) {
-      gachaAnimTimers.push(setTimeout(() => {
-        if (finished) return;
-        aura.classList.add(`r${best}`);
-        omen.textContent = best >= 6 ? "とてつもない何かの気配…！" : best >= 5 ? "伝説の気配…！" : "光が強くなっていく…";
-        omen.classList.remove("hidden");
-        Sound.play("gachaOmen");
-        vibrate([0, 30, 30, 30]);
-      }, Math.max(0, chargeMs - 700)));
+    function showIntermediateStage() {
+      // レアリティに応じた色のオーラを、タップの度に大きく・明るくしていく
+      if (best >= 3) aura.classList.add(`r${Math.min(best, 5)}`);
+      const baseSize = best >= 5 ? 260 : best >= 4 ? 230 : 220;
+      const ratio = 0.55 + 0.15 * stage; // 1タップ目0.7 → 2タップ目0.85 → 3タップ目1.0
+      aura.style.width = `${Math.round(baseSize * ratio)}px`;
+      aura.style.height = `${Math.round(baseSize * ratio)}px`;
+      aura.style.filter = `brightness(${(1 + stage * 0.12).toFixed(2)})`;
+      orb.textContent = GACHA_STAGE_ORBS[Math.min(stage, GACHA_STAGE_ORBS.length - 1)];
+      omen.textContent = GACHA_STAGE_OMENS[Math.min(stage, GACHA_STAGE_OMENS.length - 1)];
+      omen.classList.remove("hidden");
+      Sound.play("gachaPulse", stage);
+      vibrate([0, 25 + stage * 10]);
     }
 
-    gachaAnimTimers.push(setTimeout(() => {
-      if (finished) return;
+    function reveal() {
+      overlay.onclick = null;
       orb.classList.add("bursting");
-      gachaAnimTimers.push(setTimeout(finish, 260));
-    }, chargeMs));
+      Sound.play("reveal", best);
+      vibrate(best >= 5 ? [0, 60, 40, 60, 40, 120] : [0, 60, 60, 90]);
+      setTimeout(() => {
+        overlay.classList.add("hidden");
+        showGachaResult(pull);
+      }, 260);
+    }
+
+    overlay.onclick = () => {
+      if (locked) return;
+      locked = true;
+      setTimeout(() => { locked = false; }, 200);
+
+      stage += 1;
+      if (stage >= totalStages) {
+        reveal();
+      } else {
+        showIntermediateStage();
+        prompt.textContent = GACHA_STAGE_PROMPTS[totalStages][stage];
+      }
+    };
   }
 
   // ---------------- 図鑑コンプリート演出 ----------------

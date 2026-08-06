@@ -150,10 +150,18 @@ const Sound = (() => {
       noise({ dur: 0.9, gain: 0.05, hp: 1200, delay: 0.1 });
     },
 
-    // 高レア確定の予兆音
+    // 高レア確定の予兆音(未使用の旧効果。gachaPulseに統合)
     gachaOmen() {
       tone({ freq: 1200, dur: 0.5, type: "sine", gain: 0.18, sweepTo: 2400 });
       noise({ dur: 0.5, gain: 0.08, hp: 3000 });
+    },
+
+    // ガチャ演出のタップ段階ごとの音。段階(0,1,2...)が進むほど音程が高く強くなる。
+    gachaPulse(level) {
+      const l = level || 0;
+      const baseFreq = 700 + l * 260;
+      tone({ freq: baseFreq, dur: 0.32, type: "sine", gain: 0.16 + l * 0.02, sweepTo: baseFreq * 1.7 });
+      noise({ dur: 0.28, gain: 0.05 + l * 0.015, hp: 2000 + l * 400 });
     },
 
     // レアリティ別の当たり音
