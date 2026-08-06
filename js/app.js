@@ -24,6 +24,82 @@
   // 回答に集中させたい画面ではナビを隠す
   const HIDE_NAV = ["battle", "exam-battle"];
 
+  // ---------------- 隠しコマンド(開発者用・+5000コイン) ----------------
+  const CHEAT_COIN_AMOUNT = 5000;
+  const CHEAT_COOLDOWN_MS = 2500;      // 連続発動を防ぐクールダウン
+  const CHEAT_NAV_SEQUENCE = ["home", "status", "map", "review", "exam", "collection"];
+  const CHEAT_NAV_GAP_MS = 4000;       // タップ間がこれを超えたら数え直し
+  const CHEAT_LOGO_TAPS = 7;
+  const CHEAT_LOGO_GAP_MS = 1500;
+  const CHEAT_HOLD_MS = 3000;
+
+  let cheatCooldownUntil = 0;
+  let cheatNavBuffer = [];
+  let cheatNavLastTap = 0;
+  let cheatLogoCount = 0;
+  let cheatLogoTimer = null;
+  let cheatHoldTimer = null;
+
+  function triggerCheatCoins() {
+    const now = Date.now();
+    if (now < cheatCooldownUntil) return;
+    cheatCooldownUntil = now + CHEAT_COOLDOWN_MS;
+    Game.grantCheatCoins(state, CHEAT_COIN_AMOUNT);
+    renderTopbar();
+    // 開いている画面のコイン表示があれば更新しておく
+    if (document.getElementById("screen-collection").classList.contains("active")) renderCollection();
+    showCheatToast(CHEAT_COIN_AMOUNT);
+    Sound.play("cheat");
+    vibrate([0, 40, 40, 40, 40, 90]);
+  }
+
+  function showCheatToast(amount) {
+    const toast = el("cheat-toast");
+    toast.textContent = `🪙 +${amount}`;
+    toast.classList.remove("hidden");
+    toast.classList.remove("show");
+    void toast.offsetWidth; // アニメーションを毎回リセットするための再フロー
+    toast.classList.add("show");
+    clearTimeout(showCheatToast._hideTimer);
+    showCheatToast._hideTimer = setTimeout(() => toast.classList.add("hidden"), 1800);
+  }
+
+  // 隠しコマンド1: 下部ナビをホーム→状況→マップ→復習→試験→図鑑の順にタップ
+  function trackCheatNavTap(navKey) {
+    const now = Date.now();
+    if (now - cheatNavLastTap > CHEAT_NAV_GAP_MS) cheatNavBuffer = [];
+    cheatNavLastTap = now;
+    cheatNavBuffer.push(navKey);
+    if (cheatNavBuffer.length > CHEAT_NAV_SEQUENCE.length) cheatNavBuffer.shift();
+    if (
+      cheatNavBuffer.length === CHEAT_NAV_SEQUENCE.length &&
+      cheatNavBuffer.every((v, i) => v === CHEAT_NAV_SEQUENCE[i])
+    ) {
+      cheatNavBuffer = [];
+      triggerCheatCoins();
+    }
+  }
+
+  // 隠しコマンド2: ホーム画面のロゴを短時間に7回連打
+  function trackCheatLogoTap() {
+    cheatLogoCount += 1;
+    clearTimeout(cheatLogoTimer);
+    cheatLogoTimer = setTimeout(() => { cheatLogoCount = 0; }, CHEAT_LOGO_GAP_MS);
+    if (cheatLogoCount >= CHEAT_LOGO_TAPS) {
+      cheatLogoCount = 0;
+      triggerCheatCoins();
+    }
+  }
+
+  // 隠しコマンド3: コイン表示を3秒長押し
+  function startCheatHold() {
+    clearTimeout(cheatHoldTimer);
+    cheatHoldTimer = setTimeout(triggerCheatCoins, CHEAT_HOLD_MS);
+  }
+  function cancelCheatHold() {
+    clearTimeout(cheatHoldTimer);
+  }
+
   // ---------------- 汎用ヘルパ ----------------
   function make(tag, className, text) {
     const node = document.createElement(tag);
@@ -1198,8 +1274,18 @@
   // ---------------- 初期化 ----------------
   function init() {
     document.querySelectorAll(".nav-btn").forEach(btn => {
-      btn.addEventListener("click", () => goto(btn.dataset.nav));
+      btn.addEventListener("click", () => {
+        trackCheatNavTap(btn.dataset.nav);
+        goto(btn.dataset.nav);
+      });
     });
+
+    // 隠しコマンド: ホーム画面のロゴ連打
+    el("home-logo").addEventListener("click", trackCheatLogoTap);
+    // 隠しコマンド: コイン表示の長押し(マウス/タッチ両対応)
+    const coinBox = el("topbar-coins-box");
+    ["pointerdown"].forEach(ev => coinBox.addEventListener(ev, startCheatHold));
+    ["pointerup", "pointerleave", "pointercancel"].forEach(ev => coinBox.addEventListener(ev, cancelCheatHold));
     el("btn-goto-map").addEventListener("click", () => goto("map"));
     el("btn-goto-exam").addEventListener("click", () => goto("exam"));
     el("btn-goto-review").addEventListener("click", () => goto("review"));

@@ -18,6 +18,9 @@
 </head>
 <body>
 
+<!-- 隠しコマンドのトースト通知(開発者用) -->
+<div id="cheat-toast" class="cheat-toast hidden"></div>
+
 <header id="topbar" class="topbar hidden">
   <div class="topbar-avatar"><span id="topbar-emoji">🥚</span></div>
   <div class="topbar-info">
@@ -28,7 +31,7 @@
     <div class="xp-bar"><div id="topbar-xp-fill" class="xp-bar-fill"></div></div>
   </div>
   <div class="topbar-meta">
-    <div class="topbar-coins" title="コイン">🪙<span id="topbar-coins">0</span></div>
+    <div class="topbar-coins" id="topbar-coins-box" title="コイン">🪙<span id="topbar-coins">0</span></div>
     <div class="topbar-streak" title="連続学習日数">🔥<span id="topbar-streak">0</span></div>
   </div>
 </header>
@@ -38,7 +41,7 @@
   <!-- ホーム -->
   <section id="screen-home" class="screen">
     <div class="home-hero">
-      <div class="home-logo">🎮📘</div>
+      <div class="home-logo" id="home-logo">🎮📘</div>
       <h1>ITパスポート<br>冒険記</h1>
       <p class="home-sub">すごろくマップを進んで、ITパスポートの知識を身につけよう</p>
     </div>

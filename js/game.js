@@ -204,6 +204,14 @@ const Game = (() => {
     return { coinsGained: gained, coinBonusApplied: bonus > 0 };
   }
 
+  // 開発者用の隠しコマンド。お守りボーナスの影響を受けず、指定額をそのまま加算する。
+  function grantCheatCoins(state, amount) {
+    state.coins = (state.coins || 0) + amount;
+    state.totalCoinsEarned = (state.totalCoinsEarned || 0) + amount;
+    Storage.save(state);
+    return amount;
+  }
+
   function shuffle(arr) {
     const a = arr.slice();
     for (let i = a.length - 1; i > 0; i--) {
@@ -843,7 +851,7 @@ const Game = (() => {
   }
 
   return {
-    getCharacterInfo, addXp, addCoins, getMapData,
+    getCharacterInfo, addXp, addCoins, grantCheatCoins, getMapData,
     startTopicBattle, startBossBattle, startReviewBattle, startExam,
     finishTopicBattle, finishBossBattle, finishReviewBattle, finishExam,
     weakTopicSummary, fieldAccuracy, wrongQuestions, overallProgress,

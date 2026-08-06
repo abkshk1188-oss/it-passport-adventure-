@@ -681,3 +681,21 @@ body.gold-theme .status-card { border-color: rgba(250,204,21,0.45); }
   background: var(--danger); color: #fff; font-size: 9px; font-weight: 800; font-style: normal;
   min-width: 15px; padding: 1px 4px; border-radius: 999px; line-height: 1.4;
 }
+
+/* ---------- 隠しコマンドのトースト(開発者用) ---------- */
+.cheat-toast {
+  position: fixed; top: calc(14px + var(--safe-top)); left: 50%;
+  background: linear-gradient(135deg, var(--accent-gold), #f59e0b); color: #422006;
+  font-weight: 800; font-size: 14px; padding: 9px 20px; border-radius: 999px;
+  z-index: 90; box-shadow: 0 6px 18px rgba(0,0,0,0.35); pointer-events: none;
+  white-space: nowrap;
+}
+.cheat-toast.hidden { display: none; }
+.cheat-toast.show { animation: cheatToastPop 1.8s ease forwards; }
+@keyframes cheatToastPop {
+  0% { opacity: 0; transform: translate(-50%, -10px) scale(0.85); }
+  12% { opacity: 1; transform: translate(-50%, 0) scale(1.08); }
+  22% { transform: translate(-50%, 0) scale(1); }
+  82% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -8px) scale(0.95); }
+}

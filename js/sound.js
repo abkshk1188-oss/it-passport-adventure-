@@ -194,6 +194,12 @@ const Sound = (() => {
       arpeggio([48, 60], 0.0, { dur: 1.6, type: "sine", gain: 0.14 });
       noise({ dur: 1.2, gain: 0.06, hp: 3000, delay: 0.8 });
     },
+
+    // 隠しコマンド(開発者用)のコイン獲得音。通常のcoinより煌びやかにする。
+    cheat() {
+      arpeggio([76, 79, 83, 88, 91, 95], 0.045, { dur: 0.15, type: "square", gain: 0.18 });
+      noise({ dur: 0.22, gain: 0.07, hp: 2600, delay: 0.02 });
+    },
   };
 
   function play(name, arg) {
